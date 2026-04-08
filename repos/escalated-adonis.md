@@ -108,3 +108,63 @@ node ace test
 ```
 
 Uses Japa with SQLite in-memory.
+
+## New Features
+
+### Ticket Splitting
+
+`TicketSplitService` splits a reply into a new linked ticket with copied metadata (tags, department, priority).
+
+### Ticket Snooze / Schedule
+
+A `snoozedUntil` column on tickets tracks snooze times. Snoozed tickets are excluded from default queries. An Ace command wakes expired snoozes:
+
+```bash
+node ace escalated:wake-snoozed-tickets
+```
+
+Should be scheduled via the AdonisJS scheduler or cron.
+
+### Email Threading and Branded Templates
+
+Outbound emails include `In-Reply-To`, `References`, and `Message-ID` headers. Email templates use branded HTML with configurable logo, accent color, and footer via admin settings.
+
+### Saved Views / Custom Queues
+
+`SavedView` Lucid model and `SavedViewController` allow agents to save/recall named filter presets (personal or shared).
+
+### Embeddable Support Widget
+
+`WidgetController` provides API endpoints for the embeddable widget. Configured via admin settings.
+
+### Knowledge Base Toggle Settings
+
+KB can be enabled/disabled, set to public/private, and article feedback can be toggled. Middleware guards KB routes.
+
+### Real-time Broadcasting
+
+Core events are broadcast via AdonisJS Transmit when `broadcasting.enabled` is `true`:
+
+- `TicketCreated`, `TicketUpdated` -- broadcast to department/agent channels
+- `ReplyCreated` -- broadcast to the ticket channel
+- `TicketAssigned`, `TicketEscalated` -- broadcast to relevant agents
+
+Configuration in `config/escalated.ts`:
+
+```typescript
+broadcasting: {
+  enabled: true,
+  driver: 'transmit', // AdonisJS Transmit (SSE-based)
+},
+```
+
+### New Migrations
+
+- Add `snoozed_until` to `escalated_tickets`
+- Add `message_id` to `escalated_replies`
+- Create `escalated_saved_views`
+- Create `escalated_widget_configs`
+
+## CI/CD
+
+- **Linting**: ESLint + Prettier, enforced via GitHub Actions on every push and PR.

@@ -96,3 +96,60 @@ go test ./...
 ```
 
 Uses Go's built-in testing package with testify assertions. SQLite in-memory for unit tests.
+
+## New Features
+
+### Ticket Splitting
+
+`SplitService.SplitReply()` splits a reply into a new linked ticket. Creates a `TicketLink` record and copies metadata.
+
+### Ticket Snooze / Schedule
+
+A `SnoozedUntil` field on the `Ticket` model tracks snooze times. Snoozed tickets are excluded from default store queries. A CLI subcommand wakes expired snoozes:
+
+```bash
+escalated wake-snoozed-tickets
+```
+
+Can also be called programmatically via `services.WakeSnoozedTickets(db)` from a goroutine or external scheduler.
+
+### Email Threading and Branded Templates
+
+Outbound emails include `In-Reply-To`, `References`, and `Message-ID` headers. HTML email templates use branding settings (logo, accent color, footer) from `escalated_settings`.
+
+### Saved Views / Custom Queues
+
+`SavedView` model and `SavedViewHandler` provide CRUD for named filter presets (personal or shared).
+
+### Embeddable Support Widget
+
+`WidgetHandler` provides API endpoints for the embeddable widget (KB search, ticket creation, status lookup). Configured via admin settings.
+
+### Knowledge Base Toggle Settings
+
+KB visibility, public/private access, and feedback are controlled via settings. Middleware guards KB routes and returns 404 when disabled.
+
+### Real-time Broadcasting
+
+Core events are broadcast via Server-Sent Events (SSE) when `cfg.BroadcastingEnabled` is `true`:
+
+- `TicketCreated`, `TicketUpdated` -- broadcast to department/agent channels
+- `ReplyCreated` -- broadcast to the ticket channel
+- `TicketAssigned`, `TicketEscalated` -- broadcast to relevant agents
+
+SSE connections are managed via goroutines. A `Broadcaster` struct handles channel subscriptions and event dispatch.
+
+```go
+cfg.BroadcastingEnabled = true
+```
+
+### New Migrations
+
+- Add `snoozed_until` to `escalated_tickets`
+- Add `message_id` to `escalated_replies`
+- Create `escalated_saved_views`
+- Create `escalated_widget_configs`
+
+## CI/CD
+
+- **Linting**: golangci-lint, enforced via GitHub Actions on every push and PR.

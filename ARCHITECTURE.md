@@ -145,6 +145,12 @@ Business logic lives in dedicated service classes, not in controllers or models.
 | `AutomationRunner` | Trigger-based automation execution |
 | `BusinessHoursCalculator` | Business hours and holiday-aware time calculations |
 | `HookRegistry` | Plugin hook registration and dispatch |
+| `TicketSplitService` | Split a reply into a new linked ticket |
+| `SnoozeService` | Snooze/wake ticket scheduling |
+| `SavedViewService` | CRUD for saved filter views |
+| `WidgetService` | Widget API (KB search, ticket creation, status lookup) |
+| `BroadcastService` | Real-time event broadcasting dispatch |
+| `EmailBrandingService` | Branded email template rendering |
 
 Controllers are thin -- they validate input, call a service, and return a response.
 
@@ -275,6 +281,8 @@ Core events include:
 - `ticket.assigned`, `ticket.unassigned`, `ticket.escalated`
 - `ticket.priority_changed`, `ticket.department_changed`
 - `ticket.tagged`, `ticket.untagged`, `ticket.merged`
+- `ticket.split` (new -- when a reply is split into a new ticket)
+- `ticket.snoozed`, `ticket.unsnoozed` (new -- snooze lifecycle)
 - `reply.created`, `reply.updated`
 - `sla.breached`, `sla.warning`
 - `agent.online`, `agent.offline`
@@ -345,3 +353,101 @@ The following tables are created by every framework package (prefixed with `esca
 | `escalated_import_jobs` | Data import job tracking |
 | `escalated_custom_objects` | Custom object schemas |
 | `escalated_custom_object_records` | Custom object data |
+| `escalated_saved_views` | Saved filter presets (personal or shared) |
+| `escalated_widget_configs` | Embeddable widget configuration |
+
+## Real-time Broadcasting Architecture
+
+Escalated supports real-time event broadcasting as an opt-in feature. When enabled, core domain events are pushed to connected clients via WebSocket (or SSE, depending on framework).
+
+### How It Works
+
+1. A domain event fires (e.g., `TicketCreated`, `ReplyCreated`, `TicketAssigned`)
+2. The `BroadcastService` checks if broadcasting is enabled in config
+3. If enabled, the event is serialized and pushed to the appropriate channel/topic
+4. The frontend `useRealtime` composable receives the event and updates the UI
+
+### Framework-Specific Transports
+
+| Framework | Transport | Library |
+|-----------|-----------|---------|
+| Laravel | WebSocket (Pusher/Ably/Reverb) | Laravel Broadcasting + Echo |
+| Rails | WebSocket | ActionCable |
+| Django | WebSocket | Django Channels |
+| AdonisJS | SSE | AdonisJS Transmit |
+| Symfony | SSE | Mercure |
+| Phoenix | WebSocket | Phoenix Channels / PubSub |
+| Go | SSE | Custom goroutine-based broadcaster |
+
+### Channel Structure
+
+- `department.{id}` -- All tickets in a department
+- `ticket.{id}` -- Single ticket updates (replies, status changes)
+- `agent.{id}` -- Personal agent notifications (assignments, escalations)
+
+### Frontend Integration
+
+The `useRealtime` composable in `@escalated-dev/escalated` provides a unified API. It auto-detects whether Laravel Echo is available and falls back to HTTP polling when WebSocket/SSE is not configured:
+
+```typescript
+const { subscribe } = useRealtime()
+subscribe(`ticket.${id}`, 'ReplyCreated', (event) => { /* update UI */ })
+```
+
+### Graceful Degradation
+
+Broadcasting is fully opt-in. When disabled:
+- No WebSocket/SSE connections are established
+- The frontend composable silently falls back to periodic polling
+- Zero performance impact on the backend
+
+## Embeddable Widget API
+
+The embeddable support widget allows customers to embed a lightweight support interface on their websites. The widget is a standalone JS bundle built from the `@escalated-dev/escalated` package.
+
+### Widget Endpoints
+
+Each backend framework exposes widget API endpoints (unauthenticated, CORS-enabled, rate-limited):
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/support/widget/config` | GET | Widget configuration (colors, greeting, departments) |
+| `/support/widget/articles/search` | GET | Knowledge base article search |
+| `/support/widget/tickets` | POST | Submit a new ticket |
+| `/support/widget/tickets/status` | GET | Look up ticket status by email + ticket number |
+
+### Widget Configuration
+
+Admins configure the widget via admin settings:
+- **Accent color** -- Primary brand color
+- **Position** -- Bottom-left or bottom-right
+- **Greeting message** -- Welcome text shown in the widget
+- **Departments** -- Which departments are available for ticket submission
+- **KB search** -- Whether to show KB search in the widget
+
+### Embedding
+
+```html
+<script src="https://your-app.com/support/widget/embed.js" async></script>
+```
+
+The script loads the widget bundle and renders a floating button that opens the support panel.
+
+## Email Threading System
+
+Outbound notification emails now include proper email threading headers so replies thread correctly in email clients (Gmail, Outlook, Apple Mail, etc.).
+
+### Headers
+
+- **Message-ID** -- Unique identifier for each outbound email, stored in `escalated_replies.message_id`
+- **In-Reply-To** -- References the previous email in the thread (the message being replied to)
+- **References** -- Full chain of Message-IDs in the conversation thread
+
+### Branded Templates
+
+All notification emails use branded HTML templates. Admins can configure:
+- **Logo URL** -- Displayed in the email header
+- **Accent color** -- Used for buttons and highlights
+- **Footer text** -- Custom footer (company name, unsubscribe links, etc.)
+
+Templates are rendered by each framework's native templating engine (Blade, Jinja2, ERB, Edge, Twig, EEx, Go html/template).
