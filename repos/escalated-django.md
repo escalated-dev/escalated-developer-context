@@ -94,3 +94,65 @@ pytest
 ```
 
 Uses pytest-django with SQLite in-memory.
+
+## New Features
+
+### Ticket Splitting
+
+`TicketSplitService` splits a reply into a new linked ticket. Creates a `TicketLink` record and copies metadata.
+
+### Ticket Snooze / Schedule
+
+A `snoozed_until` field on the `Ticket` model tracks snooze times. Snoozed tickets are excluded from default querysets. A management command wakes expired snoozes:
+
+```bash
+python manage.py wake_snoozed_tickets
+```
+
+Should be scheduled via cron or Celery Beat.
+
+### Email Threading and Branded Templates
+
+Outbound emails include `In-Reply-To`, `References`, and `Message-ID` headers for threading. Django email templates use branded HTML with configurable logo, accent color, and footer via `EscalatedSetting`.
+
+### Saved Views / Custom Queues
+
+`SavedView` model and `SavedViewViewSet` (DRF) allow agents to create, update, and recall named filter presets. Views can be personal or shared.
+
+### Embeddable Support Widget
+
+`WidgetViewSet` provides API endpoints for the embeddable widget (KB search, ticket creation, status lookup). Configured via admin settings.
+
+### Knowledge Base Toggle Settings
+
+KB visibility, public/private access, and article feedback are controlled via `EscalatedSetting`. Middleware guards KB routes and returns 404 when disabled.
+
+### Real-time Broadcasting
+
+Core events are broadcast via Django Channels when `BROADCASTING.ENABLED` is `True`:
+
+- `TicketCreatedConsumer`, `TicketUpdatedConsumer` -- broadcast to department/agent groups
+- `ReplyCreatedConsumer` -- broadcast to ticket group
+- `TicketAssignedConsumer`, `TicketEscalatedConsumer` -- broadcast to relevant agents
+
+Configuration:
+
+```python
+ESCALATED = {
+    'BROADCASTING': {
+        'ENABLED': True,
+        'BACKEND': 'channels',  # Django Channels
+    },
+}
+```
+
+### New Migrations
+
+- Add `snoozed_until` to `escalated_tickets`
+- Add `message_id` to `escalated_replies`
+- Create `escalated_saved_views`
+- Create `escalated_widget_configs`
+
+## CI/CD
+
+- **Linting**: Ruff, enforced via GitHub Actions on every push and PR.

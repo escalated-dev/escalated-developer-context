@@ -103,7 +103,19 @@ actions: {
 },
 ```
 
-Available hooks: `ticket.created`, `ticket.updated`, `ticket.status_changed`, `ticket.assigned`, `ticket.unassigned`, `ticket.escalated`, `ticket.priority_changed`, `ticket.department_changed`, `ticket.tagged`, `ticket.untagged`, `ticket.merged`, `reply.created`, `reply.updated`, `sla.breached`, `sla.warning`, `agent.online`, `agent.offline`, `rating.submitted`.
+Available hooks: `ticket.created`, `ticket.updated`, `ticket.status_changed`, `ticket.assigned`, `ticket.unassigned`, `ticket.escalated`, `ticket.priority_changed`, `ticket.department_changed`, `ticket.tagged`, `ticket.untagged`, `ticket.merged`, `ticket.split`, `ticket.snoozed`, `ticket.unsnoozed`, `reply.created`, `reply.updated`, `sla.breached`, `sla.warning`, `agent.online`, `agent.offline`, `rating.submitted`.
+
+#### Broadcasting Events
+
+When real-time broadcasting is enabled, plugins can also hook into broadcast events. These fire whenever an event is pushed to connected clients via WebSocket/SSE:
+
+- `broadcast.ticket.created` -- Fired when a `TicketCreated` event is broadcast
+- `broadcast.ticket.updated` -- Fired when a `TicketUpdated` event is broadcast
+- `broadcast.reply.created` -- Fired when a `ReplyCreated` event is broadcast
+- `broadcast.ticket.assigned` -- Fired when a `TicketAssigned` event is broadcast
+- `broadcast.ticket.escalated` -- Fired when a `TicketEscalated` event is broadcast
+
+These hooks allow plugins to react to real-time events (e.g., send a Slack notification only when a ticket update is broadcast to agents, or augment the broadcast payload with plugin-specific data).
 
 ### Filters (Transform Data)
 

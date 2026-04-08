@@ -2,6 +2,35 @@
 
 Complete map of all Escalated repositories.
 
+## Platform Features
+
+All backend framework packages implement the following core features:
+
+- Ticket management (create, update, assign, close, merge, split)
+- Ticket splitting -- split a reply into a new linked ticket
+- Ticket snooze/schedule -- snooze tickets until a future date, auto-wake via scheduled command
+- Replies (public, internal notes, system messages)
+- Departments and tags
+- SLA policies with per-priority response/resolution targets and business hours
+- Escalation rules (condition-based automation)
+- Agent assignment (manual, round-robin, capacity-based, skill-based)
+- Knowledge base with toggle settings (enable/disable, public/private, feedback on/off)
+- Saved views / custom queues -- agents can save filter presets as named views (personal or shared)
+- Embeddable support widget -- JS widget for customer websites (KB search, ticket submission, status lookup)
+- Email threading -- outbound emails include In-Reply-To/References/Message-ID headers
+- Branded email templates -- configurable logo, accent color, and footer
+- Real-time broadcasting -- opt-in WebSocket/SSE broadcasting for core events with frontend polling fallback
+- Canned responses and macros
+- Custom fields and custom objects
+- Satisfaction ratings (CSAT)
+- File attachments
+- REST API with Bearer token auth
+- Inbound email processing (Mailgun, Postmark, SES, IMAP)
+- Data import (Zendesk, Freshdesk, Intercom, Help Scout)
+- Plugin system (actions, filters, endpoints, webhooks, cron, UI extensions)
+- Three hosting modes (self-hosted, synced, cloud)
+- Headless/UI-optional mode
+
 ## Backend Framework Packages
 
 These are the core products -- each embeds Escalated into a specific backend framework.
@@ -117,3 +146,22 @@ Each plugin has two packages: a metadata/README package (`plugin-{name}`) and an
 | Vue 3 | Frontend, all Inertia backends | UI framework |
 | Tailwind CSS | Frontend, Desktop, WordPress | Utility-first CSS |
 | Vite | Frontend, Laravel, AdonisJS | Build tool |
+
+## CI/CD Linting
+
+All repositories enforce code style via GitHub Actions:
+
+| Repo | Linter |
+|------|--------|
+| escalated (frontend) | ESLint + Prettier |
+| escalated-laravel | Laravel Pint |
+| escalated-rails | RuboCop |
+| escalated-django | Ruff |
+| escalated-adonis | ESLint + Prettier |
+| escalated-symfony | PHP-CS-Fixer |
+| escalated-go | golangci-lint |
+| escalated-phoenix | Credo + mix format |
+| escalated-filament | Laravel Pint |
+| escalated-wordpress | Laravel Pint |
+| escalated-plugin-sdk | ESLint + Prettier |
+| escalated-plugin-runtime | ESLint + Prettier |
