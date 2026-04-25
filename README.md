@@ -12,6 +12,9 @@ Three hosting modes let teams run fully self-hosted, sync to a central cloud, or
 
 | Path | What It Covers |
 |------|----------------|
+| [`glossary.md`](glossary.md) | One-line definitions of Escalated-specific terms. Start here if a term is ambiguous. |
+| [`domain-model/`](domain-model/) | Canonical explanations of core concepts (ticketing, workflows, guest policy, email threading). |
+| [`decisions/`](decisions/) | ADRs — locked architectural decisions, dated, append-only. |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | System architecture: hosting modes, driver pattern, plugin system, event model |
 | [`CONVENTIONS.md`](CONVENTIONS.md) | Code style, naming, database, git, and testing conventions |
 | [`SECURITY.md`](SECURITY.md) | OWASP considerations, auth patterns, plugin sandboxing, token management |
@@ -19,6 +22,14 @@ Three hosting modes let teams run fully self-hosted, sync to a central cloud, or
 | [`repos/`](repos/) | Per-repo deep dives -- directory structure, config, routes, key files |
 | [`repos/overview.md`](repos/overview.md) | Complete map of every repo with purpose, language, and links |
 | [`guides/`](guides/) | How-to guides for common platform tasks |
+
+## When to read which
+
+- **"What does X mean?"** → [`glossary.md`](glossary.md)
+- **"Why is it done this way?"** → [`domain-model/`](domain-model/) for the concept, [`decisions/`](decisions/) for the ADR that locked it
+- **"How do I do X?"** → [`guides/`](guides/)
+- **"What's in a specific repo?"** → [`repos/`](repos/)
+- **"How should I style / structure / test this?"** → [`CONVENTIONS.md`](CONVENTIONS.md), [`TESTING.md`](TESTING.md)
 
 ## Repo Inventory (Quick Reference)
 
