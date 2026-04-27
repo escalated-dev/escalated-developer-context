@@ -26,3 +26,4 @@ Each ADR has:
 |---|---|---|
 | 2026-04-23 | [Public ticket system architecture](2026-04-23-public-ticket-system.md) | Accepted |
 | 2026-04-24 | [Admin vs agent tool split (Workflows / Automations / Macros)](2026-04-24-admin-agent-tool-split.md) | Accepted |
+| 2026-04-26 | [Automation + Macro backend parity (NestJS, Symfony, Phoenix, Go)](2026-04-26-automation-macro-backend-parity.md) | Accepted |

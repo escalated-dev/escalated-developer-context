@@ -65,7 +65,7 @@ This doc is the canonical source. When a PR, commit, or doc disagrees with this,
 
 **Frontend** — `src/pages/Admin/Automations/` (Form.vue, Index.vue).
 
-**Portfolio status (as of 2026-04-24)** — backend exists in 7 of 11 host plugins: Laravel, Rails, Django, Adonis, WordPress, .NET, Spring. Missing in NestJS (reference), Symfony, Phoenix, Go. See [decisions/2026-04-24-admin-agent-tool-split](../decisions/2026-04-24-admin-agent-tool-split.md).
+**Portfolio status (as of 2026-04-26)** — the time-based `AutomationRunner` (or NestJS `AutomationService` + scheduler) ships in all 11 implementations: Laravel, Rails, Django, Adonis, WordPress, .NET, Spring, NestJS (reference), Symfony, Phoenix, and Go. Recorded in [decisions/2026-04-26-automation-macro-backend-parity](../decisions/2026-04-26-automation-macro-backend-parity.md); taxonomy locked in [decisions/2026-04-24-admin-agent-tool-split](../decisions/2026-04-24-admin-agent-tool-split.md).
 
 ---
 
@@ -83,7 +83,7 @@ This doc is the canonical source. When a PR, commit, or doc disagrees with this,
 
 **Frontend** — `src/pages/Admin/Macros/` (admin CRUD) + `components/MacroDropdown.vue` (agent-facing, on ticket detail).
 
-**Portfolio status (as of 2026-04-24)** — backend exists in 8 of 11: Laravel, Rails, Django, Adonis, WordPress, .NET, Spring, NestJS. Missing in Symfony, Phoenix, Go.
+**Portfolio status (as of 2026-04-26)** — `Macro` + `MacroService` ship in all 11 implementations above (same host list as Automations). See [decisions/2026-04-26-automation-macro-backend-parity](../decisions/2026-04-26-automation-macro-backend-parity.md).
 
 ---
 
