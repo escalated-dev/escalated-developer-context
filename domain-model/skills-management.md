@@ -120,15 +120,25 @@ Three tables. Names use the host plugin's standard `escalated_` prefix.
 - `department_id` FK → escalated_departments, on delete cascade
 - unique `(skill_id, department_id)`
 
+**Storage variant: JSON columns on `escalated_skills`.** Hosts may store routing tag/department IDs as `JSON` columns (`routing_tag_ids`, `routing_department_ids`) directly on the skills row instead of materialising the two join tables, **iff**:
+
+1. The wire payload still emits ID arrays in the names above (`routing_tag_ids`, `routing_department_ids`).
+2. The host's `SkillRoutingService` can still answer "which skills are required for this ticket?" efficiently — typically by indexing the JSON column or by a small in-memory scan (acceptable when skills count is < few hundreds).
+3. The host's UI counters (`routing_tags_count`, `routing_departments_count`) read from `count($skill->routing_tag_ids ?? [])`, not from a join.
+
+`escalated-laravel` uses this variant (see PR #95). Join-table storage remains canonical for NestJS, Rails, Django, Phoenix, Go, .NET, Spring, Symfony, WordPress, Adonis. Pick whichever fits your framework's idioms; do not block on storage choice when reviewing.
+
 ### `escalated_agent_skills` (existing; **migrated**)
 Pre-skills-management this table held `(agent_profile_id, skill_id)` and was managed as a simple many-to-many. It is now an explicit junction with a proficiency column and uses `user_id` (not `agent_profile_id`) for portability across hosts.
 
 - `id` PK
-- `user_id` FK → users (host's user model)
+- `user_id` FK → users (host's user model) — no DB-level FK on hosts that follow the [#88 portability pattern](https://github.com/escalated-dev/escalated-laravel/issues/88) of not constraining to the host's user table
 - `skill_id` FK → escalated_skills, on delete cascade
 - `proficiency` smallint not null default 3, check 1..5
 - `created_at`, `updated_at` timestamps
 - unique `(user_id, skill_id)`
+
+Naming note: the table is `escalated_agent_skills` (plural). Laravel's PR #95 uses the singular Eloquent convention `escalated_agent_skill`; new hosts should use the plural form. Either is acceptable as long as the host's models / ORM resolve correctly.
 
 **Migration note for hosts that already shipped the old `(agent_profile_id, skill_id)` join:** drop the old table and recreate, or `ALTER TABLE` to (a) rename `agent_profile_id` to `user_id` with a backfill from `agent_profiles.user_id`, (b) add `proficiency` (default 3), (c) add timestamps, (d) add primary key.
 
@@ -173,4 +183,16 @@ Host plugins do not author Vue. They register the page paths with their Inertia 
 
 ## Per-host status
 
-The 10 host plugins each need to mirror the schema, routes, controller, and admin sidebar wire-up above. Tracking lives in per-repo issues (search "skills management parity").
+| Host | State (2026-05-13) | Storage | Note |
+|---|---|---|---|
+| escalated-nestjs (reference) | ✅ Shipped | Join tables | PR #45 |
+| escalated-laravel | ✅ Shipped | JSON columns | PR #95. Proficiency default differs from spec (1 vs. 3) — non-blocking. |
+| escalated-rails | 🚧 In progress | — | Issue #54 |
+| escalated-django | ⬜ Not started | — | Issue #51 |
+| escalated-adonis | ⬜ Not started | — | Issue #72 |
+| escalated-symfony | ⬜ Not started | — | Issue #56 |
+| escalated-wordpress | ⬜ Not started | — | Issue #55 |
+| escalated-phoenix | ⬜ Not started | — | Issue #65 |
+| escalated-go | ⬜ Not started | — | Issue #61 |
+| escalated-dotnet | ⬜ Not started | — | Issue #58 |
+| escalated-spring | ⬜ Not started | — | Issue #60 |
