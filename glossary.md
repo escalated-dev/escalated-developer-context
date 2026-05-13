@@ -32,6 +32,16 @@ For the "why" behind a term, follow the link into `domain-model/`.
 
 **Escalation rule** — legacy term; still exists as its own entity in some hosts. Overlaps with Automations conceptually (time-based) but has different UI and a narrower action set. Treated as its own category for now.
 
+## Skill routing
+
+**Skill** — an admin-managed capability label (e.g. "Networking"). Stored in `escalated_skills`. Names are display-only since 2026-05-13; routing uses explicit mapping tables, not name-match. See [skills-management](domain-model/skills-management.md).
+
+**Routing tag (skill)** — an `escalated_skill_routing_tags` row mapping `(skill_id, tag_id)`. Reads as: "tickets with this tag require this skill." Admin-managed via Admin → Skills → Edit.
+
+**Routing department (skill)** — an `escalated_skill_routing_departments` row mapping `(skill_id, department_id)`. Reads as: "tickets in this department require this skill."
+
+**Agent proficiency** — `escalated_agent_skills.proficiency`, a 1..5 smallint self-rating per `(user_id, skill_id)`. Used by `SkillRoutingService.findMatchingAgents` to break ties (higher proficiency wins, then existing capacity rules apply).
+
 ## Email plumbing
 
 **Message-ID** — outbound emails set `Message-ID: <ticket-{id}@{domain}>` (and `<ticket-{id}-reply-{replyId}@{domain}>` for replies). Canonical across all frameworks after the 2026-04 email rollout. See [email-threading](domain-model/email-threading.md).
