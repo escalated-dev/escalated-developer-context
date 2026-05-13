@@ -187,7 +187,7 @@ Host plugins do not author Vue. They register the page paths with their Inertia 
 |---|---|---|---|
 | escalated-nestjs (reference) | ✅ Shipped | Join tables | PR #45 |
 | escalated-laravel | ✅ Shipped | JSON columns | PR #95. Proficiency default differs from spec (1 vs. 3) — non-blocking. |
-| escalated-rails | 🚧 In progress | — | Issue #54 |
+| escalated-rails | ✅ Shipped | Join tables | PR #55 |
 | escalated-django | ⬜ Not started | — | Issue #51 |
 | escalated-adonis | ⬜ Not started | — | Issue #72 |
 | escalated-symfony | ⬜ Not started | — | Issue #56 |
