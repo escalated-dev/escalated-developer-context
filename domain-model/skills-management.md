@@ -191,7 +191,7 @@ Host plugins do not author Vue. They register the page paths with their Inertia 
 | escalated-django | ✅ Shipped | Join tables | PR #52 |
 | escalated-dotnet | ✅ Shipped | Join tables | PR #68. Proficiency migrated from string enum to int 1..5 via `LegacySkillProficiency` backfill. |
 | escalated-spring | ✅ Shipped | Join tables | PR #62. Vendored `escalated-locale` .properties files until the Maven Central publish pipeline is wired up. |
-| escalated-filament | 🚧 Pending | Inherits Laravel | Issue #28 — Filament SkillResource form update in progress 2026-05-17. |
+| escalated-filament | ✅ Shipped | Inherits Laravel | PR #29 — Filament SkillResource exposes routing tags + departments + agent proficiency. Temporarily pins escalated-laravel to `dev-main as 1.4.0`; restore to `^1.4.0` once that release is tagged. |
 | escalated-adonis | ✅ Shipped | Join tables | PR #73 |
 | escalated-symfony | ✅ Shipped | Join tables | PR #58 (rebased on master during review to drop a duplicate users-management commit). |
 | escalated-wordpress | ✅ Shipped | Plugin tables (`{prefix}escalated_*`) | PR #56. 4 tests skipped with TODOs — 2 newly-added skill tests (non-deterministic factory ids) + 2 pre-existing tag-pivot flakes exposed when the earlier PHP fatal stopped masking them. |
