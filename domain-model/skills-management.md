@@ -183,16 +183,17 @@ Host plugins do not author Vue. They register the page paths with their Inertia 
 
 ## Per-host status
 
-| Host | State (2026-05-13) | Storage | Note |
+| Host | State (2026-05-17) | Storage | Note |
 |---|---|---|---|
 | escalated-nestjs (reference) | ✅ Shipped | Join tables | PR #45 |
-| escalated-laravel | ✅ Shipped | JSON columns | PR #95. Proficiency default differs from spec (1 vs. 3) — non-blocking. |
-| escalated-rails | ✅ Shipped | Join tables | PR #55 |
-| escalated-django | ⬜ Not started | — | Issue #51 |
-| escalated-adonis | ⬜ Not started | — | Issue #72 |
-| escalated-symfony | ⬜ Not started | — | Issue #56 |
-| escalated-wordpress | ⬜ Not started | — | Issue #55 |
-| escalated-phoenix | ⬜ Not started | — | Issue #65 |
-| escalated-go | ⬜ Not started | — | Issue #61 |
-| escalated-dotnet | ⬜ Not started | — | Issue #58 |
-| escalated-spring | ⬜ Not started | — | Issue #60 |
+| escalated-laravel | ✅ Shipped | JSON columns | PR #95 + #100 (fix: transactions + agent-role validation). |
+| escalated-rails | ✅ Shipped | Join tables | PR #55 + #56 (fix: SQL count + case-insensitive name uniqueness). |
+| escalated-django | ✅ Shipped | Join tables | PR #52 |
+| escalated-dotnet | ✅ Shipped | Join tables | PR #68. Proficiency migrated from string enum to int 1..5 via `LegacySkillProficiency` backfill. |
+| escalated-spring | ✅ Shipped | Join tables | PR #62. Vendored `escalated-locale` .properties files until the Maven Central publish pipeline is wired up. |
+| escalated-filament | 🚧 Pending | Inherits Laravel | Issue #28 — needs Filament SkillResource form update. |
+| escalated-adonis | 🚧 In progress | — | Issue #72 — Cursor dispatched 2026-05-17. |
+| escalated-symfony | 🚧 In progress | — | Issue #56 — Cursor dispatched 2026-05-17. |
+| escalated-wordpress | 🚧 In progress | — | Issue #55 — Cursor dispatched 2026-05-17. |
+| escalated-phoenix | 🚧 In progress | — | Issue #65 — Cursor dispatched 2026-05-17. |
+| escalated-go | 🚧 In progress | — | Issue #61 — Cursor dispatched 2026-05-17. |
