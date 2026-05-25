@@ -52,6 +52,26 @@ For the "why" behind a term, follow the link into `domain-model/`.
 
 **Provider parser** — framework-agnostic interface that adapts Postmark / Mailgun / SES webhooks into a common `InboundMessage` DTO. The router operates on that DTO.
 
+## Newsletter system
+
+**Newsletter** — an **admin-only broadcast campaign**. Subject + Markdown body + target list + theme + schedule. Status flows `draft → scheduled → sending → sent` (or `paused`/`failed`). Stored in `escalated_newsletters`. Opt-in via `enable_newsletters` (false by default). See [newsletters](domain-model/newsletters.md).
+
+**NewsletterList** — named recipient bucket. `kind` ∈ `{static, dynamic}`. Static lists carry explicit member rows; dynamic lists carry a saved filter JSON evaluated at Plan time. **Recipients are frozen at Plan time** — mid-send list changes don't affect an active send.
+
+**NewsletterTemplate** — reusable Markdown body + theme slug + optional default subject. Not a campaign; a campaign references one (via `template_id`) and may override the body or theme.
+
+**NewsletterDelivery** — one row per recipient per campaign. Holds the `tracking_token` (40-char random, opaque, unique), snapshotted `email_at_send`, status (`pending|queued|sent|bounced|complained|suppressed|failed`), and open/click/bounce timestamps. Stored in `escalated_newsletter_deliveries`.
+
+**marketing_opt_out_at** — nullable timestamp column on `escalated_contacts`. **Contact-scoped, not list-scoped**: setting it removes the contact from every newsletter, on every list, forever (until admin action). Set by one-click unsubscribe.
+
+**tracking_token** — 40-char random opaque ID per delivery. Embedded in pixel URL, click-redirect URL, unsubscribe URL, and view-in-browser URL. Token resolution is constant-time on unknown tokens to prevent enumeration.
+
+**Newsletter pipeline** — `Submit → Plan → Dispatch → Track`. Submit is admin save; Plan freezes recipients into delivery rows; Dispatch is the cron-tick batch worker; Track ingests opens/clicks/bounces from both ESP webhooks and self-hosted endpoints. See [newsletters](domain-model/newsletters.md).
+
+**Newsletter theme** — a server-side template file in the host's templating language (Blade, Handlebars, ERB, Jinja, Twig, EEx, Edge, Go html/template, Razor or plain HTML). Each backend ships `default` and `branded`; customers add themes by dropping files into the conventional theme directory.
+
+**newsletters.manage** / **newsletters.send** — the two new permissions. `manage` covers authoring + lists + templates + test-send; `send` covers Schedule and Send Now. Both seeded onto the Admin role by default; split so a future Marketing role can have one without the other.
+
 ## Guest submission
 
 **Guest policy** — admin setting with three modes: `unassigned` (default), `guest_user`, `prompt_signup`. Controls what identity a guest-submitted ticket gets. See [guest-policy](domain-model/guest-policy.md).
