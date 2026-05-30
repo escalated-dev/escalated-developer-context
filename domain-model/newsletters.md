@@ -42,7 +42,7 @@ A **NewsletterTemplate** is a reusable authoring artifact — body + theme + opt
 3. **Dispatch.** A cron tick (default every minute) pulls `status = pending` delivery rows in batches (default 50). For each row: claim under a transaction (`status = queued, claimed_at = now`), render via the renderer service, send via the host's mail adapter, mark `status = sent` on success. Synchronous failures retry with exponential backoff (1m, 5m, 30m) up to 3 attempts before terminal `failed`. Rows stuck in `queued` for >10 minutes are reclaimed to `pending` (worker-crash recovery). When all deliveries are terminal, the newsletter flips to `sent`.
 
 4. **Track.** Two ingress paths, idempotent updates:
-   - **ESP webhooks** at `/escalated/webhooks/newsletter/{postmark|mailgun|ses|sendgrid}`. Events keyed by `Message-ID` → `tracking_token`. Handles `delivered`, `opened`, `clicked`, `bounced` (soft = log only; hard = mark `bounced` + suppress email + increment `summary_bounced`), `complained` (mark + suppress).
+   - **ESP webhooks** — handled by the host's *existing* inbound ESP webhook endpoints (Postmark/Mailgun/SES/SendGrid parsers under `src/services/email/`), which gain an outbound-event handler. No dedicated newsletter route. Events keyed by `Message-ID` → `tracking_token`. Handles `delivered`, `opened`, `clicked`, `bounced` (soft = log only; hard = mark `bounced` + suppress email + increment `summary_bounced`), `complained` (mark + suppress).
    - **Self-hosted pixel + redirect**: `/escalated/n/o/{token}.gif` (open) and `/escalated/n/c/{token}?u=<base64-url>` (click). The renderer rewrites every `<a href>` in the outbound HTML to the click endpoint and appends the pixel before `</body>`.
 
    Both paths use **first-event-wins** for `opened_at` and **last-event-wins** for `last_clicked_at`. Opens after a bounce are dropped. The two paths are not mutually exclusive — ESP and self-hosted can both fire, and the idempotency guards ensure correctness.
@@ -164,14 +164,16 @@ POST   /escalated/n/u/{token}        One-click unsub (RFC 8058 compatible)
 GET    /escalated/n/v/{token}        View-in-browser themed render
 ```
 
-### ESP webhook routes (no auth; provider signature validation)
+### ESP outbound-event handling (no dedicated routes)
 
-```
-POST   /escalated/webhooks/newsletter/postmark
-POST   /escalated/webhooks/newsletter/mailgun
-POST   /escalated/webhooks/newsletter/ses
-POST   /escalated/webhooks/newsletter/sendgrid
-```
+There are **no newsletter-specific webhook routes.** Newsletter delivery events
+(`delivered`/`opened`/`clicked`/`bounced`/`complained`) arrive on the host's
+**existing ESP inbound webhook endpoints** — the same Postmark / Mailgun / SES /
+SendGrid parsers under `src/services/email/` already used for inbound email. The
+newsletter system adds an **outbound-event handler** to those parsers that
+correlates each event by `Message-ID` → `newsletter_deliveries.tracking_token`.
+Backends must extend the existing inbound webhook handler, not register a new
+`/escalated/webhooks/newsletter/*` route.
 
 ---
 
