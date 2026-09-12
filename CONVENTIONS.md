@@ -159,6 +159,71 @@ Each framework uses its idiomatic config format:
 - Go: `escalated.DefaultConfig()` struct
 - WordPress: Settings stored in `wp_options` via admin UI
 
+## Versioning and Releases
+
+Every package uses semantic versioning, and in this portfolio the **patch
+component carries ordinary work**:
+
+```
+1.8.0 -> 1.8.1     a fix, or a small addition        <- the usual case
+1.8.1 -> 1.9.0     a substantial feature
+1.9.0 -> 2.0.0     a breaking change
+```
+
+Do not reach for a minor bump simply because a change adds a public method. Most
+releases across these repos are fixes and small additions, and numbering each of
+them as a minor inflates the middle number until it stops meaning anything. The
+version should read as "small change" unless the change is not one.
+
+### First releases
+
+A package that has never been published starts at `0.1.0`, whatever its
+maturity. `0.x` is what tells a reader the API can still move, which is the
+honest signal for something nothing has consumed yet. Reserve `1.0.0` for a
+package that has users and an API you intend to keep.
+
+### Cutting one
+
+1. Move everything under `[Unreleased]` in `CHANGELOG.md` to a dated version
+   heading, and leave `[Unreleased]` empty above it.
+2. Update the version in the package manifest, where the language has one
+   (`mix.exs`, `*.csproj`, `build.gradle.kts`, `package.json`, `pubspec.yaml`).
+   Go has none -- the tag is the version.
+3. Merge, then tag `vX.Y.Z` and cut a GitHub release from the changelog entry.
+
+A Go tag is published permanently by the module proxy the moment it is pushed,
+so it is worth being certain of the number before pushing one.
+
+## Page Names
+
+Backends render Inertia page names as plain strings, and the frontend package
+resolves them to components. **A name with no component behind it is not an
+error**: Inertia resolves it to nothing, Vue renders nothing, and the panel
+comes up blank on a 200 response. It reads as a permissions problem or an empty
+dataset, and no test in either repo can see it -- the backend's test asserts a
+status, and the frontend's test never hears the name.
+
+Four screens shipped blank this way before anyone noticed.
+
+### The rules
+
+- **`@escalated-dev/escalated` is canonical.** A page name means whatever that
+  package's `src/pages/**` says it means. A backend does not get to spell it
+  differently.
+- **`Index`, `Form`, `Show`.** One `Form` component serves create and edit, so
+  there is no `New`/`Edit` pair -- that would be two names for one file.
+  Framework idiom belongs in routes, not in page names.
+- **Full paths, spelled out.** `Admin/KnowledgeBase/Articles/Index`, not
+  `Admin/KB/Articles/Index` or `Admin/Articles/Index`.
+- **Check it in CI.** The frontend publishes `pages.json`, generated from its own
+  components. Each backend asserts in CI that every name it renders appears in
+  that list. That comparison is the only place both halves are known.
+
+### Adding a screen
+
+Add the component to the frontend first and release it, then render its name
+from the backend. The reverse order ships a blank screen and a green build.
+
 ## Git Conventions
 
 ### Branch Naming

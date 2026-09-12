@@ -45,6 +45,10 @@ These are the core products -- each embeds Escalated into a specific backend fra
 | escalated-symfony | [escalated-dev/escalated-symfony](https://github.com/escalated-dev/escalated-symfony) | PHP | Symfony 6.4/7.x | Composer bundle | PHP 8.2+, Node 18+ |
 | escalated-go | [escalated-dev/escalated-go](https://github.com/escalated-dev/escalated-go) | Go | net/http, Chi | Go module | Go 1.21+ |
 | escalated-wordpress | [escalated-dev/escalated-wordpress](https://github.com/escalated-dev/escalated-wordpress) | PHP | WordPress 6.0+ | WP plugin | PHP 8.1+ |
+| escalated-nestjs | [escalated-dev/escalated-nestjs](https://github.com/escalated-dev/escalated-nestjs) | TypeScript | NestJS 10/11 | npm package (reference implementation -- new behaviour lands here first) | Node 20+ |
+| escalated-dotnet | [escalated-dev/escalated-dotnet](https://github.com/escalated-dev/escalated-dotnet) | C# | ASP.NET Core 8 | NuGet package | .NET 8+ |
+| escalated-spring | [escalated-dev/escalated-spring](https://github.com/escalated-dev/escalated-spring) | Java | Spring Boot 4 | Maven/Gradle package | JDK 17+ |
+| escalated-laravel-mobile-api | [escalated-dev/escalated-laravel-mobile-api](https://github.com/escalated-dev/escalated-laravel-mobile-api) | PHP | Laravel | Mobile customer/guest support API on top of escalated-laravel | PHP 8.2+ |
 
 ## UI Packages
 
@@ -67,6 +71,8 @@ These are the core products -- each embeds Escalated into a specific backend fra
 |------|--------|----------|---------|
 | escalated-desktop | [escalated-dev/escalated-desktop](https://github.com/escalated-dev/escalated-desktop) | Rust / Yew (WASM) | Tauri v2 multi-site agent desktop app |
 | escalated-flutter | [escalated-dev/escalated-flutter](https://github.com/escalated-dev/escalated-flutter) | Dart | Flutter mobile SDK (customer-facing) |
+| escalated-flutter-html3 | [escalated-dev/escalated-flutter-html3](https://github.com/escalated-dev/escalated-flutter-html3) | Dart | Flutter client rendering the HTML3 surface |
+| escalated-locale | [escalated-dev/escalated-locale](https://github.com/escalated-dev/escalated-locale) | JSON | Central translation catalogues, consumed by every frontend and backend |
 
 ## Infrastructure
 
@@ -75,6 +81,8 @@ These are the core products -- each embeds Escalated into a specific backend fra
 | escalated-cloud | [escalated-dev/escalated-cloud](https://github.com/escalated-dev/escalated-cloud) | Cloud API (cloud.escalated.dev) |
 | escalated-docs | [escalated-dev/escalated-docs](https://github.com/escalated-dev/escalated-docs) | Public documentation site (multi-language) |
 | escalated-developer-context | [escalated-dev/escalated-developer-context](https://github.com/escalated-dev/escalated-developer-context) | This repo -- developer knowledge base |
+| escalated-private-context | [escalated-dev/escalated-private-context](https://github.com/escalated-dev/escalated-private-context) | Private counterpart -- internal plans, infra topology, roadmap |
+| escalated-github | [escalated-dev/escalated-github](https://github.com/escalated-dev/escalated-github) | GitHub integration |
 
 ## Official Plugins (in escalated-plugins monorepo)
 

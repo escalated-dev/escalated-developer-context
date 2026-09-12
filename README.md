@@ -22,6 +22,7 @@ Three hosting modes let teams run fully self-hosted, sync to a central cloud, or
 | [`repos/`](repos/) | Per-repo deep dives -- directory structure, config, routes, key files |
 | [`repos/overview.md`](repos/overview.md) | Complete map of every repo with purpose, language, and links |
 | [`guides/`](guides/) | How-to guides for common platform tasks |
+| [`AGENTS.md`](AGENTS.md) | Working agreement for coding agents and tools -- and the hazards specific to a platform built across eleven backends |
 
 ## When to read which
 
@@ -51,7 +52,16 @@ Three hosting modes let teams run fully self-hosted, sync to a central cloud, or
 | `escalated-plugins` | TypeScript | Official plugin monorepo |
 | `escalated-desktop` | Rust / Yew | Tauri v2 desktop agent app |
 | `escalated-flutter` | Dart | Flutter mobile SDK |
+| `escalated-flutter-html3` | Dart | Flutter client for the HTML3 surface |
+| `escalated-nestjs` | TypeScript | NestJS package -- the reference implementation |
+| `escalated-dotnet` | C# | ASP.NET Core package |
+| `escalated-spring` | Java | Spring Boot starter |
+| `escalated-laravel-mobile-api` | PHP | Mobile customer/guest API atop escalated-laravel |
+| `escalated-locale` | JSON | Central translation catalogues |
 | `escalated-docs` | Markdown | Public documentation site |
+
+The full inventory, with languages, requirements and links, is in
+[`repos/overview.md`](repos/overview.md).
 
 ## Who This Is For
 
