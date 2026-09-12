@@ -203,7 +203,9 @@ comes up blank on a 200 response. It reads as a permissions problem or an empty
 dataset, and no test in either repo can see it -- the backend's test asserts a
 status, and the frontend's test never hears the name.
 
-Four screens shipped blank this way before anyone noticed.
+Sixty-three page names were rendering into nothing across six backends when
+this was first measured. Two of them were screens that had never been built;
+the rest were a backend spelling a name its own way.
 
 ### The rules
 
@@ -219,10 +221,61 @@ Four screens shipped blank this way before anyone noticed.
   components. Each backend asserts in CI that every name it renders appears in
   that list. That comparison is the only place both halves are known.
 
+### The guard test
+
+Every backend has one, named for its own idiom -- `PageNameParityTest`,
+`page_name_parity_test`, `Test_Page_Name_Parity`. They all do the same three
+things:
+
+1. Scan the package's own source for `Escalated/...` string literals, keeping
+   the file each one came from. A failure that says only
+   `Escalated/Admin/Tags/Listing` is not enough to act on.
+2. Diff that against the manifest. JavaScript backends read it out of
+   `node_modules/@escalated-dev/escalated/pages.json`, so it cannot go stale;
+   everywhere else it is vendored as a fixture and refreshed with the
+   dependency.
+3. Assert the manifest is actually there and holds more than fifty names. A
+   fixture that goes missing would otherwise make the first check pass by
+   comparing against nothing.
+
+Write the failure message for whoever hits it. The wording in use:
+
+```
+these page names have no component in @escalated-dev/escalated, so they render a blank panel:
+  Escalated/Admin/Tags/Listing  (TagController.php)
+
+Either the name is wrong, or the component has not been released yet.
+If it has been: refresh tests/Fixtures/escalated-pages.json from the package.
+```
+
+### When a name cannot simply be renamed
+
+Sometimes a backend's screen is a different shape from the component's -- it
+passes `{ data, filters }` where the component takes flat props, or persists
+settings under different keys. Renaming the page name then turns the test green
+and leaves the screen just as blank, which is worse than leaving it red.
+
+Those go on a `KNOWN_BLANK` list in the guard test, **with the reason written
+against each one**, and a third test that fails if an entry on the list has
+since been fixed. The list may shrink. It must never grow.
+
 ### Adding a screen
 
 Add the component to the frontend first and release it, then render its name
 from the backend. The reverse order ships a blank screen and a green build.
+
+### The name is only half of it
+
+A name that resolves is not a screen that works. The component reads particular
+props, and a backend handing it different ones renders the chrome and no
+content -- an empty ticket queue reads as a quiet day, not as a wiring fault.
+Three separate cases of this turned up alongside the naming work: list
+components read `records.data` and page through `records.links`, ticket detail
+screens read `ticket.replies` rather than a sibling `replies` prop, and the
+report screens take their figures flat rather than nested under `stats`.
+
+Check the component's `defineProps` before renaming anything. Nothing checks it
+for you yet.
 
 ## Git Conventions
 
