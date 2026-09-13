@@ -28,7 +28,7 @@ This doc is the canonical source. When a PR, commit, or doc disagrees with this,
 - `ticket.status_changed`
 - `reply.created`
 
-**Conditions** — a list of `{field, operator, value}` clauses evaluated against the triggering ticket. Supported operators include `=`, `!=`, `>`, `<`, `contains`, `matches` (regex, ReDoS-protected).
+**Conditions** — `{field, operator, value}` clauses evaluated against the triggering ticket, grouped as `{all: [...]}` or `{any: [...]}`. The operator names every backend accepts are listed in [workflow-admin-contract.md](workflow-admin-contract.md#conditions).
 
 **Actions** — fixed catalog. Core (every framework): `change_priority`, `add_tag`, `remove_tag`, `change_status`, `set_department`, `assign_agent`, `add_note`, `insert_canned_reply`. Deferred (NestJS-reference-first, ports follow): `send_webhook` (SSRF-protected), `assign_round_robin`, `add_follower`, `delay`.
 
@@ -41,7 +41,7 @@ This doc is the canonical source. When a PR, commit, or doc disagrees with this,
 - `WorkflowRunnerService` — `runForEvent(event, ticket, workflows)`. Filters to matching triggers, orders by sort/priority.
 - `WorkflowListener` — framework-native bridge. Spring uses `@EventListener`, .NET uses `IEscalatedEventDispatcher` decorator, WordPress hooks into existing `escalated_*` actions, Phoenix uses explicit helpers (no auto-emit).
 
-**Frontend** — `src/pages/Admin/Workflows/` (Builder.vue, Index.vue, Logs.vue).
+**Frontend** — `src/pages/Admin/Workflows/` (Builder.vue, Form.vue, Index.vue, Logs.vue). What the UI and a backend exchange (page props, the create/update body, toggle and reorder) is fixed in [workflow-admin-contract.md](workflow-admin-contract.md).
 
 ---
 
