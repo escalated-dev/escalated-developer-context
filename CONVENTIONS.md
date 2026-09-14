@@ -266,16 +266,76 @@ from the backend. The reverse order ships a blank screen and a green build.
 
 ### The name is only half of it
 
-A name that resolves is not a screen that works. The component reads particular
-props, and a backend handing it different ones renders the chrome and no
-content -- an empty ticket queue reads as a quiet day, not as a wiring fault.
-Three separate cases of this turned up alongside the naming work: list
-components read `records.data` and page through `records.links`, ticket detail
-screens read `ticket.replies` rather than a sibling `replies` prop, and the
-report screens take their figures flat rather than nested under `stats`.
+A name that resolves is not a screen that works. Inertia passes props **by
+name**: a name the component does not declare is not passed at all -- it lands
+on the root element as an attribute -- and the component renders its defaults
+instead. The chrome appears and the content does not, on a 200.
 
-Check the component's `defineProps` before renaming anything. Nothing checks it
-for you yet.
+That failure hides better than a blank screen does. An empty ticket queue reads
+as a quiet day; a report of zeroes reads as a quiet week. Nobody files a bug
+about a quiet week.
+
+`pages.json` therefore publishes the props each page reads, alongside the names,
+and which of them the component declares required:
+
+```json
+"props": {
+    "Escalated/Admin/Reports/AgentRanking": { "props": ["agents", "period_days"], "required": [] }
+}
+```
+
+**Each backend checks its own render payloads against that**, the same way it
+checks its names. The check runs in both directions, because both are wrong:
+
+- a **declared prop that is not sent** renders as its default;
+- a **sent prop that is not declared** goes nowhere at all.
+
+Where the backend has a request to inspect, assert on the Inertia response.
+Where the suite mocks its repository layer and there is no request, read the
+literal prop keys at each render site out of the source -- that still catches a
+controller sending names nothing declares, which is the whole of the fault that
+has actually occurred.
+
+Two things are worth asserting alongside it, because both halves of the
+comparison can quietly become empty: that the manifest still describes props at
+all, and that the render sites are still being found. A pattern that stops
+matching reports a clean controller for the same reason a missing fixture does.
+
+### What this has actually caught
+
+Not hypotheticals -- all of these were live:
+
+- **Twenty-seven report screens across four backends** rendering zeroes, laravel
+  included, where the page names had been correct for weeks. `SlaTrends` was
+  sent `trends`/`by_department`/`risk_forecast` against `breach_trend`,
+  `breach_by_department`, `at_risk_tickets` and four counts nothing produced;
+  `AgentRanking` was sent three lists where it reads one called `agents`;
+  `Comparison` was sent a metric-keyed object where it reads two periods.
+- **Six django screens rendering as permanently empty lists**, the admin, agent
+  and customer ticket queues among them, because a bare array plus a sibling
+  `pagination` object was handed to components that read `records.data` and page
+  through `records.links`.
+- **A rails SSO settings form saving keys the SSO implementation never reads**,
+  while hiding every key it does.
+- **A prop declared in camelCase** (`triggerEvents`) that never matched the
+  `trigger_events` every backend sends, because Vue folds kebab-case into
+  camelCase and nothing else.
+
+### When the screen is a feature away, not a rename away
+
+Some backends have no equivalent of a screen at all. Those stay on `KNOWN_BLANK`
+with the real reason written against them, and the reason matters: "a different
+set of fields" reads as a mapping job, and can be wrong by two orders of
+magnitude.
+
+Be specific and be numerate. escalated-phoenix's entry says the shared Settings
+screen submits 52 fields and the package has about seven of the concepts.
+escalated-rails' CSAT entry says the settings that screen would save are read
+nowhere, because nothing in the package ever sends a survey.
+
+A blank screen is obviously broken. A settings form that accepts an SMTP
+password and forgets it is not. That is the whole reason the exception list
+exists.
 
 ## Git Conventions
 
