@@ -122,24 +122,44 @@ class SyncedDriver implements TicketDriver
 
 ### Sync Job
 
+Events are delivered by a queued job so a slow or unreachable cloud never blocks a ticket write. Every event carries a stable `event_id` minted once at dispatch and reused on every retry; the cloud ignores redeliveries with the same id.
+
 ```php
-class SyncTicketToCloud implements ShouldQueue
+class SyncEventToCloud implements ShouldQueue
 {
     use Queueable;
 
     public int $tries = 5;
     public array $backoff = [1, 5, 30, 120, 600];
 
-    public function handle(): void
+    public function __construct(public string $event, public array $payload, public string $eventId, public string $timestamp) {}
+
+    public function handle(HostedApiClient $client): void
     {
-        Http::withToken($this->apiKey)
-            ->post("{$this->apiUrl}/sync", [
-                'type' => $this->eventType,
-                'data' => $this->ticket->toArray(),
-            ]);
+        $client->emit($this->event, $this->payload, $this->eventId, $this->timestamp)?->throw();
     }
 }
 ```
+
+The wire contract every backend speaks (Laravel, Rails, Django):
+
+```http
+POST {api_url}/events
+Authorization: Bearer {sync token}
+
+{
+  "event": "ticket.created",
+  "payload": { ...ticket array, must include "reference"... },
+  "event_id": "9b0f...-uuid",
+  "timestamp": "2026-09-15T02:59:00+00:00"
+}
+```
+
+Event names: `ticket.created`, `ticket.updated`, `ticket.status_changed` (`payload.new_status`), `ticket.assigned`, `ticket.unassigned`, `ticket.priority_changed`, `ticket.department_changed`, `ticket.tags_added`, `ticket.tags_removed`, `reply.created` (`payload.ticket_reference` + `payload.reply`). The cloud tolerates the ticket either as the payload itself (Laravel) or nested under `payload.ticket` (Django), and translates the package vocabulary (`medium`, `critical`, `waiting_on_*`, `escalated`, `reopened`, `live`) onto its own.
+
+### Two-way sync
+
+Agent actions taken in the cloud portal come back as signed webhooks. The cloud posts `ticket.updated` / `ticket.status_changed` with the projected ticket to `{site url}/escalated/cloud/webhook`, signed as `X-Escalated-Signature: sha256=<hmac of the raw body>` with the site's webhook signing secret. The projected ticket carries the site's own reference as `external_id`; the receiver applies the change to that local ticket through the local driver (so listeners and workflows fire) and never re-emits it to the cloud, which closes the loop. Tickets without an `external_id` never came from the site and are ignored.
 
 ### Offline Resilience
 
