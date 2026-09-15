@@ -159,7 +159,15 @@ Event names: `ticket.created`, `ticket.updated`, `ticket.status_changed` (`paylo
 
 ### Two-way sync
 
-Agent actions taken in the cloud portal come back as signed webhooks. The cloud posts `ticket.updated` / `ticket.status_changed` with the projected ticket to `{site url}/escalated/cloud/webhook`, signed as `X-Escalated-Signature: sha256=<hmac of the raw body>` with the site's webhook signing secret. The projected ticket carries the site's own reference as `external_id`; the receiver applies the change to that local ticket through the local driver (so listeners and workflows fire) and never re-emits it to the cloud, which closes the loop. Tickets without an `external_id` never came from the site and are ignored.
+Agent actions taken in the cloud portal come back as signed webhooks. The cloud posts `ticket.updated` / `ticket.status_changed` with the projected ticket to a webhook receiver on the site. Each backend provides a receiver endpoint and is configured with a signing secret:
+
+| Backend | Receiver route | Secret setting | Since |
+|---|---|---|---|
+| escalated-laravel | `POST /escalated/cloud/webhook` | `ESCALATED_CLOUD_SIGNING_SECRET` (`escalated.hosted.signing_secret`) | v1.8.4 |
+| escalated-rails | `POST /<route_prefix>/cloud/webhook` (default prefix `support`) | `Escalated.configuration.hosted_signing_secret` | v0.6.4 |
+| escalated-django | `POST /<ROUTE_PREFIX>/cloud/webhook/` (default prefix `support`) | `ESCALATED["HOSTED_SIGNING_SECRET"]` | v0.6.4 |
+
+All three backends verify `X-Escalated-Signature` as `sha256=` + HMAC-SHA256 of the raw body, ignore replayed `event_id`s for 24 hours, apply only `ticket.updated` and `ticket.status_changed` to the local ticket whose reference equals the projection's `external_id`, and run the change through the local driver so it is never echoed back to the cloud. The projected ticket carries the site's own reference as `external_id`; the receiver applies the change to that local ticket through the local driver (so listeners and workflows fire) and closes the loop. Tickets without an `external_id` never came from the site and are ignored.
 
 ### Offline Resilience
 
