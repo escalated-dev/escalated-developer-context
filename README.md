@@ -1,5 +1,7 @@
 # Escalated Developer Context
 
+[![Views](https://hits.sh/github.com/escalated-dev/escalated-developer-context.svg?style=flat&label=views&color=007ec6)](https://hits.sh/github.com/escalated-dev/escalated-developer-context/)
+
 The single source of truth for all Escalated platform knowledge -- architecture, conventions, approaches, and developer guides.
 
 ## What is Escalated?
