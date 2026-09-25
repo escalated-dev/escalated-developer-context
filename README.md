@@ -74,4 +74,4 @@ The full inventory, with languages, requirements and links, is in
 
 ## License
 
-MIT
+MIT - Copyright (c) Escalated.dev. See [LICENSE](LICENSE).
