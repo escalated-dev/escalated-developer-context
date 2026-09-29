@@ -16,17 +16,31 @@ It also does not unpublish a registry artifact or modify a deployed marketplace.
 
 ## Slack
 
-Outbound notification code exists. Inbound ticket delivery remains in progress.
-An emitted `slack.message.received` hook alone is not an inbound integration.
-Before advertising bidirectional support, acceptance coverage must demonstrate:
+Laravel implements authenticated, durable inbound text messages in source. The
+native receiver verifies the original signed bytes and timestamp before resolving
+trusted app/workspace/channel mappings. It commits an encrypted inbox receipt
+before acknowledging Slack; scheduled processing creates a ticket from a root
+message and public replies from its thread. Retried events are deduplicated, and
+concurrent workers are covered by PostgreSQL and MySQL tests.
 
-- Signature verification over the original request bytes, timestamp freshness,
-  and real HTTP rejection before processing challenges or messages.
-- Trusted workspace/channel-to-tenant routing and requester identity mapping.
-- Durable event deduplication, a root message creating one ticket, and a thread
-  reply reaching the same ticket despite retries.
-- Suppression of bot echoes and protection of internal notes.
-- SDK, runtime and backend bridge interoperability using a real plugin manifest.
+The host provisions requester identities and tenant mappings. Message text cannot
+select a tenant or requester. Bot/subtype messages are ignored. File imports,
+edits, deletions, automatic Slack identity discovery and replies to unmapped
+pre-existing threads are not implemented. Native tenant-mode outbound Slack
+delivery is also not implemented; do not describe this as complete bidirectional
+support across backends.
+
+The single-tenant SDK plugin path now verifies Slack signatures and uses the
+compatible runtime HTTP bridge. Laravel subscribes to `slack.message.received`,
+independently verifies its signed bytes and durably accepts the message. The
+plugin returns a retryable error if the host does not acknowledge acceptance.
+Generic plugin execution remains disabled in tenant mode; use the native route.
+
+Source availability is not a published package or a deployed Slack app. Release
+compatible SDK/runtime/plugin/backend versions, migrate the inbox, configure the
+signing secret and trusted mappings, and run the scheduler before activation.
+The [Laravel Slack runbook](https://github.com/escalated-dev/escalated-laravel/blob/main/docs/slack-inbound.md)
+documents setup, retries, failed receipts, retention and notification limitations.
 
 ## Microsoft Teams
 
@@ -47,6 +61,21 @@ tenant/team/channel mappings and requester identity policy. Production values
 are configuration inputs, not reasons to claim the adapter is already available.
 
 ## Merchant host boundary
+
+Laravel source now includes separate-database identity resolution, tenant query
+and policy isolation, private authorized attachment delivery, verified expiring
+guest access with tracking-reference lookup, and atomic agent API creation with
+requester, metadata and subjects. CI covers Laravel 11/12/13, exact 13.8 and
+separate host/package databases. These are Laravel capabilities, not parity
+claims for Phoenix or the other backends.
+
+Activation requires the host resolver/catalog, legacy tenant assignment, schema
+and private-file migration, mail and shared cache configuration, and compatible
+frontend forms. Follow the Laravel guides for
+[tenancy](https://github.com/escalated-dev/escalated-laravel/blob/main/docs/tenancy.md),
+[guest access](https://github.com/escalated-dev/escalated-laravel/blob/main/docs/guest-access.md)
+and the repository's attachment/API integration documentation. No production
+activation is implied by a merged implementation.
 
 The host owns merchant identity and membership. Escalated should consume a trusted
 tenant resolver rather than assume an `accounts` table or accept a posted tenant
