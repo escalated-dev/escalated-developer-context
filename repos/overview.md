@@ -92,7 +92,8 @@ Each plugin has two packages: a metadata/README package (`plugin-{name}`) and an
 
 | Plugin | Purpose |
 |--------|---------|
-| escalated-plugin-slack | Slack notifications and bi-directional messaging |
+| escalated-plugin-slack | Slack notifications; verified inbound ticket delivery is in progress |
+| Microsoft Teams | Planned integration; no implementation or release date yet |
 | escalated-plugin-jira | Jira issue linking and sync |
 | escalated-plugin-whatsapp | WhatsApp Business messaging channel |
 | escalated-plugin-social | Social media (Twitter/X, Facebook) messaging |
@@ -104,7 +105,7 @@ Each plugin has two packages: a metadata/README package (`plugin-{name}`) and an
 | escalated-plugin-phone | Phone/voice channel integration |
 | escalated-plugin-sms | SMS messaging channel |
 | escalated-plugin-livechat | Real-time live chat widget |
-| escalated-plugin-web-widget | Embeddable web widget for customer sites |
+| escalated-plugin-web-widget | Unreleased experimental prototype; not available for merchant use |
 | escalated-plugin-proactive-messages | Proactive outbound messaging |
 
 ### AI and Automation

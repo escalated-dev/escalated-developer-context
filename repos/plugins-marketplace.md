@@ -2,6 +2,18 @@
 
 The plugin marketplace (`marketplace.escalated.dev`) is the discovery and distribution channel for Escalated plugins.
 
+## Availability
+
+An entry in the repository catalogue is not a release guarantee. The web-widget
+plugin is **unreleased and unavailable for merchant use**: its embed bundle and
+configurator are missing, and its declared Origin allowlist is not enforced.
+Do not offer installation instructions or an available status for this prototype.
+The built-in widget in individual backends is a separate feature.
+
+These source metadata and documentation changes do not update a deployed
+marketplace database. A deployment must keep its listing consistent with this
+status. See [integration readiness](../guides/integration-readiness.md).
+
 ## What It Does
 
 1. **Plugin registry** -- Lists all available plugins with metadata, screenshots, and version history

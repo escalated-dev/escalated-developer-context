@@ -29,7 +29,8 @@ The `-sdk` package contains the `definePlugin()` call and is what the plugin run
 ## Plugin Categories
 
 ### Integrations
-- **Slack** -- Notifications, bi-directional messaging, channel mapping
+- **Slack** -- Outbound notifications. Verified inbound ticket/thread delivery is in progress; do not advertise bidirectional support until its acceptance tests pass.
+- **Microsoft Teams** -- Planned adapter; not implemented and no delivery date committed. See [integration readiness](../guides/integration-readiness.md).
 - **Jira** -- Issue linking, status sync, two-way updates
 - **WhatsApp** -- WhatsApp Business messaging channel
 - **Social** -- Twitter/X and Facebook messaging
@@ -38,7 +39,7 @@ The `-sdk` package contains the `definePlugin()` call and is what the plugin run
 - **Phone** -- Voice/phone channel
 - **SMS** -- SMS messaging
 - **Live Chat** -- Real-time chat widget
-- **Web Widget** -- Embeddable support widget
+- **Web Widget** -- Unreleased experimental prototype, not available for merchant or public use. Both source copies are marked private pending the release criteria in their READMEs.
 - **Proactive Messages** -- Outbound messaging triggers
 
 ### AI and Automation
