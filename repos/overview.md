@@ -92,7 +92,7 @@ Each plugin has two packages: a metadata/README package (`plugin-{name}`) and an
 
 | Plugin | Purpose |
 |--------|---------|
-| escalated-plugin-slack | Slack notifications; verified inbound ticket delivery is in progress |
+| escalated-plugin-slack | Slack notifications; Laravel has authenticated durable inbound tickets/replies in source (see [readiness](../guides/integration-readiness.md#slack)) |
 | Microsoft Teams | Planned integration; no implementation or release date yet |
 | escalated-plugin-jira | Jira issue linking and sync |
 | escalated-plugin-whatsapp | WhatsApp Business messaging channel |
