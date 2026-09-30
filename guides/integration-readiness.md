@@ -63,14 +63,15 @@ are configuration inputs, not reasons to claim the adapter is already available.
 ## Merchant host boundary
 
 Laravel source now includes separate-database identity resolution, tenant query
-and policy isolation, private authorized attachment delivery, verified expiring
-guest access with tracking-reference lookup, and atomic agent API creation with
-requester, metadata and subjects. CI covers Laravel 11/12/13, exact 13.8 and
+and policy isolation, tenant-local staff seats (host gates plus resolver
+`isAgent`/`isAdmin`, denied by default), private authorized attachment
+delivery, verified expiring guest access with tracking-reference lookup, and
+atomic agent API creation with requester, metadata and subjects. CI covers Laravel 11/12/13, exact 13.8 and
 separate host/package databases. Laravel's Slack inbox and atomic integration
 creation contract must not be inferred for another backend from this summary.
 
-Activation requires the host resolver/catalog, legacy tenant assignment, schema
-and private-file migration, mail and shared cache configuration, and compatible
+Activation requires the host resolver/catalog and staff seats, legacy tenant
+assignment, schema and private-file migration, mail and shared cache configuration, and compatible
 frontend forms. Follow the Laravel guides for
 [tenancy](https://github.com/escalated-dev/escalated-laravel/blob/main/docs/tenancy.md),
 [guest access](https://github.com/escalated-dev/escalated-laravel/blob/main/docs/guest-access.md)
