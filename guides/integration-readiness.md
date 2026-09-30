@@ -85,6 +85,8 @@ exclude internal correspondence. CI runs SQLite, PostgreSQL and MySQL suites,
 plus populated legacy upgrades, case-sensitive tenant uniqueness and guarded
 rollback checks on each engine.
 
+The implementation is tracked in [Phoenix #133](https://github.com/escalated-dev/escalated-phoenix/pull/133).
+
 Follow the [Phoenix merchant and guest runbook](https://github.com/escalated-dev/escalated-phoenix/blob/master/docs/merchant-and-guest-access.md).
 Activation requires the September 30 migrations, a trusted tenant resolver and
 membership/reference/user-directory callbacks, explicit legacy-data assignment,
