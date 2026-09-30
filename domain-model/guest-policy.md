@@ -13,7 +13,7 @@ address. Optional signup is also separate from mailbox proof; historical
 "accepted immediately" and "zero friction" descriptions concern account signup,
 not unverified access to correspondence.
 
-Phoenix's verified public flow currently creates an unassigned requester
+Phoenix's verified public ticket flow currently creates an unassigned requester
 (`requester_id: nil`) and a Contact, then issues a purpose-bound, expiring guest
 grant. It does not use a shared host-user identity to authorize guest access.
 Do not infer `guest_user` or signup-listener parity from the verification flow.
