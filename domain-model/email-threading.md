@@ -41,13 +41,33 @@ When an inbound email arrives, `InboundRouterService` resolves it to a ticket in
 
 If none match, the email is treated as a new submission — create-or-resolve `Contact` by sender email, create ticket.
 
+### Which paths count
+
+Paths 1, 2, 4 and 5 are built from values anyone can guess or copy: Message-IDs are deterministic from the ticket id, and references are sequential. Only the signed Reply-To (path 3) proves the sender received mail about that ticket.
+
+- **Inbound secret configured** (outbound therefore carries the signed Reply-To): only path 3 identifies a ticket. Mail that fails verification, or arrives without the signed address, is a new submission.
+- **No inbound secret**: the full chain above is used, as a compatibility mode for hosts that have not set one.
+
+---
+
+## Inbound: who a reply may post as
+
+Matching a thread is not enough to post on it. After a ticket is found:
+
+1. **The sender must be the ticket's requester.** The `From` address, compared case-insensitively, must equal the ticket's guest email or the requester's email. Anyone else — a stranger quoting a reference, a forwarded copy, a CC'd party — gets a new ticket of their own. Their mail is never dropped silently and never reopens the matched ticket.
+2. **The author comes from the ticket, not the header.** A matching sender posts as the requester (the requester user, or a guest reply). Staff identity is never derived from `From`, which is unauthenticated: an email naming an agent's address is not treated as that agent. Agents reply in the app. Until a per-agent signed reply address exists, agent email replies become new tickets.
+3. **Only an accepted reply reopens** a resolved or closed ticket.
+
+`From` can still be forged for the requester's own address, so hosts should also have their inbound provider enforce SPF/DKIM/DMARC. The signed Reply-To keeps a forged requester reply from landing on a ticket the forger never received mail about.
+
 ---
 
 ## Why this shape
 
 - **No DB lookup on the critical outbound path.** Message-ID is deterministic from `ticketId`, so outbound is O(1).
 - **HMAC signature prevents spoofing.** An attacker can't fabricate a reply-to address for an arbitrary ticket without the secret.
-- **5 resolution paths prevent a single failure mode from dropping inbound mail.** Gmail stripped the header? `References` covers you. Corporate proxy rewrote everything? Subject ref covers you. Legacy email from the old format? The `InboundEmail` table covers you.
+- **A thread match is not an identity.** Message-IDs and references are guessable, so the requester check and the author rule above decide whether a matched email may post.
+- **Mail is never lost.** Anything that is not an accepted reply becomes a new ticket, so a stripped header or rewritten address costs threading, not the message.
 
 ---
 
