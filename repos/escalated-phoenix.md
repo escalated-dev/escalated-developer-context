@@ -72,11 +72,33 @@ escalated_routes "/support"
 
 ## Authorization
 
-Configured via function references (`admin_check`, `agent_check`). Enforced through Phoenix Plugs.
+`Escalated.Permissions` applies strict boolean `admin_check`/`agent_check`
+callbacks consistently across routes, APIs and channels. Without callbacks,
+single-tenant access uses host flags or active profiles. Merchant mode also
+requires current membership and uses tenant-local staff profiles instead of
+host-wide flags. Requester access checks both requester ID and type.
+
+### Merchant tenancy and verified guests
+
+The September 30, 2026 source implementation adds `tenant_id` to package data,
+scoped reads/writes/associations, private guest attachments, expiring encrypted
+mailbox-verified grants, and host-supplied tracking-reference lookup. Legacy rows
+stay in the reserved empty namespace until explicitly assigned. Jobs use an
+explicit tenant or trusted catalog, and realtime topics are partitioned.
+
+Enable only after applying all migrations and configuring the host contracts in
+the [merchant and guest runbook](https://github.com/escalated-dev/escalated-phoenix/blob/master/docs/merchant-and-guest-access.md).
+Provision staff seats separately from host membership. Merchant guest chat uses
+HTTP polling; the optional shared frontend realtime client requires a host
+Echo-to-Phoenix bridge. Generic platform plugins and host-global role mutation
+are disabled in tenant mode. This source status is not a Hex release or deployed
+configuration; see [integration readiness](../guides/integration-readiness.md).
 
 ## UI Rendering
 
-Uses the `inertia_phoenix` library. The `Escalated.Renderer` behaviour abstracts page rendering. Disable with `ui_enabled: false`.
+Uses the optional `inertia` package through
+`Escalated.Rendering.UIRenderer`. Disable with `ui_enabled: false` for JSON.
+The shared general Settings form advertises only Phoenix's implemented fields.
 
 ## Running Tests
 
@@ -84,7 +106,15 @@ Uses the `inertia_phoenix` library. The `Escalated.Renderer` behaviour abstracts
 mix test
 ```
 
-Uses ExUnit with Ecto sandbox (PostgreSQL).
+Uses ExUnit with Ecto sandbox. SQLite is the default; CI also runs PostgreSQL and
+MySQL via `ESCALATED_TEST_ADAPTER`. A separate host repository exercises the
+support/host connection boundary. The `mix test` alias drops and recreates the
+configured test database, so use disposable test targets only.
+
+After each engine's suite, CI runs `scripts/verify_tenancy_migrations.exs` in a
+separate disposable database. It checks populated upgrades, tenant-local unique
+keys, case-sensitive IDs, clean downgrades and rollback refusal for guest state
+or assigned merchant rows.
 
 ## New Features
 
@@ -120,17 +150,17 @@ KB visibility, public/private access, and feedback are controlled via settings. 
 
 ### Real-time Broadcasting
 
-Core events are broadcast via Phoenix Channels / PubSub when `broadcasting: true`:
+Core events are broadcast via Phoenix Channels / PubSub when `broadcasting_enabled: true`:
 
-- `TicketCreated`, `TicketUpdated` -- broadcast to department/agent topics
-- `ReplyCreated` -- broadcast to the ticket topic
-- `TicketAssigned`, `TicketEscalated` -- broadcast to agent topics
+- `ticket:created`, `ticket:status_changed` -- ticket and all-ticket topics
+- `ticket:reply_added` -- ticket topics, with internal-note metadata withheld from customers
+- `ticket:assigned` -- ticket and agent topics
 
 Configuration:
 
 ```elixir
 config :escalated,
-  broadcasting: true,
+  broadcasting_enabled: true,
   pubsub_server: MyApp.PubSub
 ```
 

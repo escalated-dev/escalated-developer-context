@@ -27,7 +27,12 @@ Framework-specific implementations:
 | Go | Middleware functions (`AdminCheck`, `AgentCheck`) |
 | WordPress | Custom capabilities (`escalated_admin`, `escalated_agent`) + `current_user_can()` |
 
-Guest ticket access uses **unguessable tokens** (UUID v4 or cryptographically random strings). Guest tokens are never exposed in URLs except via email magic links.
+Guest access is backend-specific. Laravel and Phoenix require mailbox proof and
+issue expiring, authenticated capabilities bound to the ticket and merchant;
+unguessable references or a claimed email do not establish access. Some supported
+guest/chat paths carry capabilities in URL segments, so hosts must redact access
+logs and keep no-store/no-referrer protections. This does not certify older
+tokens or other ports. See [integration readiness](guides/integration-readiness.md).
 
 ### 2. Cryptographic Failures
 
