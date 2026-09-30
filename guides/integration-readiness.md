@@ -1,7 +1,7 @@
 # Merchant integration readiness
 
-Updated 2026-09-29. Status is specific to the implementation named here; a change
-in Laravel does not establish parity in the other backends.
+Updated 2026-09-30. Status is specific to the implementation named here; a change
+in Laravel or Phoenix does not establish parity in the other backends.
 
 ## Web-widget plugin
 
@@ -66,8 +66,8 @@ Laravel source now includes separate-database identity resolution, tenant query
 and policy isolation, private authorized attachment delivery, verified expiring
 guest access with tracking-reference lookup, and atomic agent API creation with
 requester, metadata and subjects. CI covers Laravel 11/12/13, exact 13.8 and
-separate host/package databases. These are Laravel capabilities, not parity
-claims for Phoenix or the other backends.
+separate host/package databases. Laravel's Slack inbox and atomic integration
+creation contract must not be inferred for another backend from this summary.
 
 Activation requires the host resolver/catalog, legacy tenant assignment, schema
 and private-file migration, mail and shared cache configuration, and compatible
@@ -76,6 +76,32 @@ frontend forms. Follow the Laravel guides for
 [guest access](https://github.com/escalated-dev/escalated-laravel/blob/main/docs/guest-access.md)
 and the repository's attachment/API integration documentation. No production
 activation is implied by a merged implementation.
+
+Phoenix source also implements separate host/support repositories, tenant-scoped
+queries and writes, tenant-local staff seats, private authorized attachments,
+verified expiring guest grants, and host-resolved tracking lookup. Its tenant
+boundary includes jobs, caches and realtime topics; customer pages and events
+exclude internal correspondence. CI runs SQLite, PostgreSQL and MySQL suites,
+plus populated legacy upgrades, case-sensitive tenant uniqueness and guarded
+rollback checks on each engine.
+
+The implementation is tracked in [Phoenix #133](https://github.com/escalated-dev/escalated-phoenix/pull/133).
+
+Follow the [Phoenix merchant and guest runbook](https://github.com/escalated-dev/escalated-phoenix/blob/master/docs/merchant-and-guest-access.md).
+Activation requires the September 30 migrations, a trusted tenant resolver and
+membership/reference/user-directory callbacks, explicit legacy-data assignment,
+staff provisioning, a stable guest secret and mailbox-code delivery. Configure
+the trusted maintenance catalog and merchant public URL for newsletter links.
+Use compatible shared frontend guest forms and tenant broadcast prefixes.
+
+Phoenix merchant guest chat uses capability-authenticated HTTP polling. A host
+must supply an Echo-to-Phoenix bridge for the shared frontend's optional socket
+client; anonymous merchant sockets are denied. Host-global role changes and
+generic plugin execution are unavailable in tenant mode. Raw host repository
+access and custom callbacks remain the host's authorization responsibility.
+The source implementation does not publish a Hex package or activate production.
+Other ports remain unverified for this merchant contract. The Slack, Teams and
+web-widget plugin limits above remain unchanged.
 
 The host owns merchant identity and membership. Escalated should consume a trusted
 tenant resolver rather than assume an `accounts` table or accept a posted tenant

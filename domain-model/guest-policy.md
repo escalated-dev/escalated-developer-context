@@ -4,6 +4,24 @@ Admin-configurable setting that controls what identity a guest-submitted ticket 
 
 A "guest" is anyone who hits the public widget or sends inbound email where the sender isn't a known host-app user.
 
+## Current public-access boundary (2026-09-30)
+
+Public Laravel and Phoenix submissions require mailbox proof before creating a
+ticket or chat. Requester allocation is separate from authentication: none of
+the modes below bypasses verification or grants access from a claimed email
+address. Optional signup is also separate from mailbox proof; historical
+"accepted immediately" and "zero friction" descriptions concern account signup,
+not unverified access to correspondence.
+
+Phoenix's verified public ticket flow currently creates an unassigned requester
+(`requester_id: nil`) and a Contact, then issues a purpose-bound, expiring guest
+grant. It does not use a shared host-user identity to authorize guest access.
+Do not infer `guest_user` or signup-listener parity from the verification flow.
+Inbound sender/provider verification is a separate integration contract, and
+other ports have not been certified for the new merchant/guest boundary. See
+[integration readiness](../guides/integration-readiness.md) and the backend
+runbooks before activation.
+
 ---
 
 ## The three modes
