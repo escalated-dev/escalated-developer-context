@@ -123,6 +123,13 @@ Gate::define('escalated-admin', fn ($user) => $user->is_admin);
 Gate::define('escalated-agent', fn ($user) => $user->is_agent || $user->is_admin);
 ```
 
+These gates are global. With merchant tenancy enabled, every staff check also
+requires current membership and a tenant-local seat from the host
+`TenantResolver::isAgent($user, $tenantId)` / `isAdmin($user, $tenantId)`; the
+default resolver denies, so staff access fails closed until the host provides
+seats. A host-wide `is_agent` flag never makes a customer of one merchant its
+agent. Single-account installations use the gates unchanged.
+
 ## User Model Integration
 
 The host app's User model implements `Ticketable` and uses the `HasTickets` trait:
