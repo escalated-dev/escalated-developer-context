@@ -48,7 +48,7 @@ For the "why" behind a term, follow the link into `domain-model/`.
 
 **Signed Reply-To** — `reply+{id}.{hmac8}@{replyDomain}`. HMAC-SHA256 truncated to 8 chars keyed by `inboundReplySecret`. Verified timing-safely on inbound.
 
-**Inbound routing chain** — 5-priority resolution for matching an inbound email to a ticket: (1) `In-Reply-To` header → our Message-ID, (2) `References` header → our Message-ID, (3) signed Reply-To address, (4) subject `[TK-XXX]` reference, (5) legacy `InboundEmail.message_id` lookup.
+**Inbound routing chain** — 5-priority resolution for matching an inbound email to a ticket: (1) `In-Reply-To` header → our Message-ID, (2) `References` header → our Message-ID, (3) signed Reply-To address, (4) subject `[TK-XXX]` reference, (5) legacy `InboundEmail.message_id` lookup. With an inbound secret configured only (3) counts. A match posts only when the sender is the ticket's requester, and never as staff. See [email-threading](domain-model/email-threading.md).
 
 **Provider parser** — framework-agnostic interface that adapts Postmark / Mailgun / SES webhooks into a common `InboundMessage` DTO. The router operates on that DTO.
 
