@@ -11,6 +11,7 @@ All backend framework packages implement the following core features:
 - Ticket snooze/schedule -- snooze tickets until a future date, auto-wake via scheduled command
 - Replies (public, internal notes, system messages)
 - Departments and tags
+- Opt-in department/account ticket visibility, account routing conditions and targeted SLAs ([contract](../domain-model/ticket-access-and-routing.md))
 - SLA policies with per-priority response/resolution targets and business hours
 - Escalation rules (condition-based automation)
 - Agent assignment (manual, round-robin, capacity-based, skill-based)
@@ -48,7 +49,9 @@ These are the core products -- each embeds Escalated into a specific backend fra
 | escalated-nestjs | [escalated-dev/escalated-nestjs](https://github.com/escalated-dev/escalated-nestjs) | TypeScript | NestJS 10/11 | npm package (reference implementation -- new behaviour lands here first) | Node 20+ |
 | escalated-dotnet | [escalated-dev/escalated-dotnet](https://github.com/escalated-dev/escalated-dotnet) | C# | ASP.NET Core 8 | NuGet package | .NET 8+ |
 | escalated-spring | [escalated-dev/escalated-spring](https://github.com/escalated-dev/escalated-spring) | Java | Spring Boot 4 | Maven/Gradle package | JDK 17+ |
-| escalated-laravel-mobile-api | [escalated-dev/escalated-laravel-mobile-api](https://github.com/escalated-dev/escalated-laravel-mobile-api) | PHP | Laravel | Mobile customer/guest support API on top of escalated-laravel | PHP 8.2+ |
+
+The mobile customer/guest API is part of `escalated-laravel` and shares its
+ticket visibility enforcement.
 
 ## UI Packages
 
