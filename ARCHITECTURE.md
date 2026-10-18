@@ -407,7 +407,7 @@ The embeddable support widget allows customers to embed a lightweight support in
 
 ### Widget Endpoints
 
-Each backend framework exposes widget API endpoints (unauthenticated, CORS-enabled, rate-limited):
+Each backend framework exposes widget API endpoints (unauthenticated, rate-limited; cross-origin only for allow-listed sites, see below):
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -431,7 +431,36 @@ Admins configure the widget via admin settings:
 <script src="https://your-app.com/support/widget/embed.js" async></script>
 ```
 
-The script loads the widget bundle and renders a floating button that opens the support panel.
+The script is the standalone bundle (`@escalated-dev/escalated/widget`,
+`dist/widget/escalated-widget.js`). Loaded from `{widgetPath}/embed.js` it finds
+its backend from its own URL. It renders a floating launcher, or with
+`data-mode="inline" data-target="#el"` an on-page support form. Host parameters
+(`data-tabs`, `data-department`, `data-lock-department`, visitor prefill,
+`data-meta-*` metadata, ...) and the `window.EscalatedWidget` JS API are
+documented in the frontend repo's `docs/embedding-the-widget.md`.
+
+### Embedding on other sites (cross-origin contract)
+
+Embedding on a site other than the backend's own is opt-in per origin. A
+backend that supports it:
+
+- keeps an allow list of bare origins (`scheme://host[:port]`, optional
+  `https://*.example.com` subdomain wildcard, never a bare `*`), from config
+  and an admin setting `widget_allowed_origins`;
+- answers preflights from listed origins (`GET, POST, OPTIONS`; headers
+  `Accept, Authorization, Content-Type, X-Requested-With`) and adds
+  `Access-Control-Allow-Origin: <origin>` + `Vary: Origin` to every widget
+  response for them, including 422 and 429;
+- skips CSRF for listed origins and treats those requests as guests even when
+  the browser has a signed-in session (credentials are never allowed);
+- handles every other request exactly as before;
+- serves the bundle at `{widgetPath}/embed.js`;
+- returns `accepts_metadata: true` from `/config` when it stores host
+  `metadata` on widget tickets/chats as a sanitised flat map with a
+  server-recorded `embedded_on` origin. The widget sends `metadata` only then.
+
+Implemented in: Laravel (1.9.4). Other backends: not yet; the widget still
+works same-origin there and never sends `metadata` to them.
 
 ## Email Threading System
 
