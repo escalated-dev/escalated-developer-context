@@ -76,7 +76,7 @@ For the "why" behind a term, follow the link into `domain-model/`.
 
 **Guest policy** — admin setting with three modes: `unassigned` (default), `guest_user`, `prompt_signup`. Controls what identity a guest-submitted ticket gets. See [guest-policy](domain-model/guest-policy.md).
 
-**Widget** — the `<script>` tag + Vue component embedded on a host site's public pages. Submits tickets via `POST /{prefix}/widget/tickets`. Prefix is `/support` by default, configurable via `data-widget-path`.
+**Widget** — the `<script>` tag + Vue component embedded on a host site's public pages. Submits tickets via `POST /{prefix}/widget/tickets`. Prefix is `/support` by default, configurable via `data-widget-path`. Other sites can embed it only when their origin is on the backend's allow list (`widget_allowed_origins`); see ARCHITECTURE.md "Embedding on other sites".
 
 ## Portfolio
 
