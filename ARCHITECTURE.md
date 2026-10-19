@@ -462,6 +462,27 @@ backend that supports it:
 Implemented in: Laravel (1.9.4). Other backends: not yet; the widget still
 works same-origin there and never sends `metadata` to them.
 
+#### Parity status (surveyed 2026-10-19 from each repo's default branch)
+
+| Backend | CSRF on widget POSTs today | CORS today | `/config` | Host `metadata` stored | Gap to the contract |
+|---|---|---|---|---|---|
+| laravel | host CSRF; skipped for listed origins | allow list (config + setting) | yes, `accepts_metadata` | yes (sanitised) | none |
+| nestjs | none (JSON) | unused `widgetOrigins` option | **missing** | no | `/config`, CORS, metadata, `embed.js` |
+| rails | `protect_from_forgery with: :null_session` | none | yes | fixed `{source:'widget'}` | CORS, metadata, `embed.js` |
+| django | `@csrf_exempt` | none | yes | chat only, unsanitised | CORS, ticket metadata + sanitising, `embed.js` |
+| adonis | host `shield` may apply | none | yes | chat only, unsanitised | CSRF exemption for listed origins, CORS, metadata, `embed.js` |
+| symfony | none | **echoes any `Origin`**; empty list allows all | yes | body passed to chat | allow-list check on every route, settings-backed list, metadata, `embed.js` |
+| wordpress | none (no cookie nonce) | none | yes | no | CORS, metadata, `embed.js` |
+| phoenix | host `:protect_from_forgery` (README mounts in `:browser`) | none | yes (app config) | no | CSRF exemption for listed origins, CORS, metadata, `embed.js` |
+| go | none | **`AllowedOrigins` string written to ACAO, default `*`** | yes | no | per-origin matching, metadata, `embed.js` |
+| dotnet | none | none | **missing** | no | `/config`, CORS, metadata, `embed.js` |
+| spring | `csrf.disable()` | none | **missing** | no | `/config`, CORS, metadata, `embed.js` |
+
+None of the other backends exposes the `/verification` endpoint the shared
+widget uses when `/config` returns `guest_verification_required: true`; that
+predates embedding and is tracked with verified guest access.
+
+
 ## Email Threading System
 
 Outbound notification emails now include proper email threading headers so replies thread correctly in email clients (Gmail, Outlook, Apple Mail, etc.).
