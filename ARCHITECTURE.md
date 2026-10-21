@@ -276,17 +276,20 @@ Every significant action dispatches an event. Events are consumed by:
 3. **Webhooks** -- Outbound HTTP calls to configured URLs with signed payloads
 4. **Sync events** -- In synced mode, replicated to the cloud API
 
-Core events include:
+Canonical event names (ADR `decisions/2026-10-21-event-vocabulary.md`), used for
+webhooks, workflow triggers and plugin hooks:
 - `ticket.created`, `ticket.updated`, `ticket.status_changed`
+- `ticket.resolved`, `ticket.closed`, `ticket.reopened`
 - `ticket.assigned`, `ticket.unassigned`, `ticket.escalated`
 - `ticket.priority_changed`, `ticket.department_changed`
-- `ticket.tagged`, `ticket.untagged`, `ticket.merged`
-- `ticket.split` (new -- when a reply is split into a new ticket)
-- `ticket.snoozed`, `ticket.unsnoozed` (new -- snooze lifecycle)
-- `reply.created`, `reply.updated`
-- `sla.breached`, `sla.warning`
-- `agent.online`, `agent.offline`
-- `rating.submitted`
+- `ticket.tag_added`, `ticket.tag_removed`
+- `reply.created`, `note.created`
+- `sla.warning`, `sla.breached`
+- `chat.started`, `chat.assigned`, `chat.transferred`, `chat.message`, `chat.ended`
+
+Legacy spellings (`ticket.replied`, `internal_note.added`, `tag.added`,
+`ticket.tagged`, `chat.session_started`, ...) are accepted when reading stored
+workflows and webhook subscriptions, and never emitted.
 
 ## Cloud API Architecture
 
