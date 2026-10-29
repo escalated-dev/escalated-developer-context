@@ -185,13 +185,19 @@ only if all of these hold, and refused otherwise:
   the metadata URL);
 - the Response `Destination` and the bearer `SubjectConfirmationData`
   `Recipient` equal the ACS URL;
-- `Conditions` and `SubjectConfirmationData` validity windows hold, with
-  `escalated.sso.clock_skew` seconds of skew (default 120, max 300);
-- `InResponseTo` is the ID of the AuthnRequest this session started
-  (consumed on use). IdP-initiated (unsolicited) responses are refused unless
+- `Conditions` and `SubjectConfirmationData` validity windows hold, with at
+  most a few minutes of drift (`escalated.sso.clock_skew`, default 120, max
+  300; a port may use its SAML library's fixed allowance instead, as Laravel
+  does with php-saml's 180 seconds);
+- `InResponseTo` is the ID of an AuthnRequest this install issued in the last
+  10 minutes, consumed on use. Issued IDs are stored server-side, not in the
+  session: the IdP's cross-site POST to the ACS does not carry a SameSite=Lax
+  session cookie. IdP-initiated (unsolicited) responses are refused unless
   `escalated.sso.allow_idp_initiated` is true (default false);
-- the assertion `ID` has not been accepted before (replay). Used IDs are
-  stored in `escalated_sso_replays` until their expiry plus skew.
+- the assertion `ID` has not been accepted before (replay). Request and used
+  IDs are stored in `escalated_sso_message_ids` (`kind`, `message_id`,
+  `expires_at` in Unix seconds, unique on `kind` + `message_id`) until their
+  expiry plus skew.
 
 **OAuth 2 / OIDC** (Laravel: `league/oauth2-client`). Authorization-code flow
 with a single-use `state` bound to the session and PKCE (`S256`). The code is
@@ -204,7 +210,7 @@ configured `sso_jwt_algorithm` (HS* with `sso_jwt_secret`, RS* with the
 public key in `sso_jwt_secret`); `alg: none` and algorithm switching are
 refused. `exp` is required, `nbf`/`iat` are honoured with skew, `aud` must
 equal `escalated.sso.jwt_audience` (default the app URL), and `jti` is
-required and single-use (stored in `escalated_sso_replays`).
+required and single-use (stored in `escalated_sso_message_ids`).
 
 **Provisioning and mapping** (all providers):
 
