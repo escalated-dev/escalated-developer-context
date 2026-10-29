@@ -280,10 +280,10 @@ it is serving and ignores a `plugin` parameter that names another.
 | `ctx.store.insert/update/delete` | `insert` takes `key` from `data.key`; `update` merges. |
 | `ctx.tickets.find/query/create/update` | Through the host's ticket service, so events fire. `create` accepts only `subject`/`title`, `body`/`description`, `priority`, `status` (slug), `department_id`, `ticket_type`, `channel` (default `api`), `metadata`, and `contact_id` or `requester_email`/`requester_name` (a contact, found or created). `update` accepts the same minus channel and requester. `query` filters only on `id`, `reference`, `status`, `priority`, `channel`, `ticket_type`, `department_id`, `requester_id`, `contact_id`, `assigned_to`; any other key is an error, never a column name. Cap the rows (NestJS: 500). |
 | `ctx.replies.find/query/create` | `create` requires `ticket_id` and `body`; `is_internal: true` makes a note. `query` filters on `ticket_id`, `is_internal`, `type`. |
-| *acting user* | Writes act as the signed-in user of the request the plugin is serving, or as no user (0) outside a request. A plugin never names the actor or the requester id. |
+| *acting user* | Writes act as the signed-in user of the request the plugin is serving, or as no user (0) outside a request. A plugin never names the actor or the requester id. A bridge host finds that request from the call's `host_call_id` (see [The SDK bridge](#the-sdk-bridge)). |
 | `ctx.contacts.find/findByEmail/create` | `name`, `email`. |
 | `ctx.tags.all/create`, `ctx.departments.all/find`, `ctx.agents.all/find` | Read models as the host's API serializes them. |
-| `ctx.broadcast.toChannel/toUser/toTicket` | Through the host's broadcaster; a no-op where it has none. |
+| `ctx.broadcast.toChannel/toUser/toTicket` | Through the host's broadcaster, as event `event` with payload `data`; a no-op where it has none. Laravel's channels: `plugin.{channel}` (public), `private-user.{userId}` (that user's connections), `private-ticket.{ticketId}` (connections allowed to see the ticket). Hosts with their own realtime transport map these to its rooms with the same audiences. |
 | `ctx.log` | The host log, with the plugin name attached. |
 | `ctx.emit(hook, data)` | See [Actions](#actions-the-canonical-events). |
 | `ctx.currentUser()` | The user of the request being served, or `null`. |
@@ -308,6 +308,16 @@ For hosts that run `@escalated-dev/plugin-runtime`.
   `cron {plugin, schedule}`, `badge {plugin, component}`.
 - **Runtime to host**: the `ctx.*` methods above, which can arrive while the
   host waits for its own answer. Serve them in that wait.
+- **Host call ids**: the runtime serves host calls concurrently. Every `ctx.*`
+  call a plugin makes while handling a host call carries `host_call_id`, the
+  JSON-RPC `id` of that host call (runtimes after 0.2.0, which also answer the
+  handshake with `host_call_ids: true`). A host with several calls in flight
+  uses it to find the call being served: its plugin(s) and its request, so the
+  acting user and `ctx.currentUser` are that request's, never another's. A
+  `ctx.*` call with an unknown or missing `host_call_id` acts for no user; a
+  host may fall back to the only call in flight when there is exactly one (an
+  older runtime). Hosts that serve one request per process (Laravel, Symfony)
+  may ignore the field.
 - **Timeouts**: handshake and manifest 15 s, action 30 s, filter 5 s, endpoint
   30 s, webhook 60 s.
 - **Failure**: a dead runtime is restarted on next use with exponential backoff
@@ -319,6 +329,27 @@ For hosts that run `@escalated-dev/plugin-runtime`.
   `plugins: [active names]` on `action` and `filter` so a runtime that honours
   it can gate them.
 
+### Cron
+
+The SDK's `cron` keys are five-field cron expressions
+(`minute hour day-of-month month day-of-week`, evaluated in UTC), reported in
+the manifest as `cronSchedules`. Once a minute, from the host's own scheduler,
+send `cron {plugin, schedule}` for each **active** plugin and each of its
+schedules that is due that minute (an in-process host calls
+`cron[schedule](ctx)`). Each call runs with no acting user, under the action
+timeout (30 s); a failing or slow schedule is logged and never stops the
+others. An expression the host cannot parse is logged and skipped. No cron is
+sent for an inactive plugin, or in tenant mode.
+
+### Badges
+
+A widget with a `badge` function (manifest `hasBadge: true`) gets a live count.
+While building `dashboardWidgets` for a viewer, send `badge {plugin, component}`
+for each such widget of an active plugin, as that viewer (acting user and
+`ctx.currentUser`), under the filter timeout (5 s). Put the answer on the item
+as `badge` (a number, a string or `null`); a failure or timeout is `null`.
+Widgets without a badge function carry no `badge` key.
+
 ## UI extensions
 
 Shared on every Escalated page as `escalated.plugins`, built from **active**
@@ -328,7 +359,7 @@ plugins' manifests. This is the shape `usePluginExtensions()` reads:
 |---|---|---|
 | `menuItems` | `pages[].menu` | `{label, route: <page URL>, icon, position (default 100), section (default admin), plugin}` |
 | `pageComponents` | `components[]` | Map of `"{page}.{slot}"` to `[{plugin, component, data: props, position: order}]` |
-| `dashboardWidgets` | `widgets[]` | `{id: "{slug}.{component}", title: label, component, plugin, position: order, width: size}` |
+| `dashboardWidgets` | `widgets[]` | `{id: "{slug}.{component}", title: label, component, plugin, position: order, width: size}`, plus `badge` for a widget with a badge function (see [Badges](#badges)) |
 
 `plugin` here is the **slug**: the frontend loads slot and widget components
 from a directory named after it. An item with a `capability` the viewer lacks
@@ -373,6 +404,9 @@ Recorded on 2026-10-29. Fix the backend, then strike the line.
 - Laravel's `ContextHandler` trusts a `plugin` parameter from the runtime.
 - Laravel's `ctx.tickets.query` and `ctx.replies.query` use the filter's keys
   as column names, and `ctx.replies.create` mass-assigns whatever it is given.
+- Laravel never sends `cron` or `badge`: SDK plugin schedules never run and
+  widget badges are never asked for. The shared frontend does not render a
+  widget's `badge` yet.
 
 ## Status by backend
 
@@ -419,6 +453,9 @@ Through the host's real HTTP stack, with a stand-in SDK plugin (a
 - [ ] Filters run in priority order, only for active plugins, and a throwing filter is skipped.
 - [ ] `ctx.config.set` merges; `ctx.store.query` handles the operators and rejects a field name with SQL in it; one plugin cannot read another's rows through `ctx`.
 - [ ] `escalated.plugins` carries `menuItems`, `pageComponents` and `dashboardWidgets` for active plugins only.
+- [ ] A widget with a badge function carries the plugin's `badge` answer, asked as the viewer; a failing badge is `null`.
+- [ ] A due cron schedule of an active plugin runs once for that minute; an undue one, or an inactive plugin's, does not.
+- [ ] Bridge hosts: two plugin calls in flight at once, each from a different signed-in user, each see their own user in `ctx.currentUser` and as the actor of a write (`host_call_id`).
 
 **Page-name parity**: take `Escalated/Admin/Plugins/Index` and
 `Escalated/Plugin/Page` off the "not rendered yet" list.
