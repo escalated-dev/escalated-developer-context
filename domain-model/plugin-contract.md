@@ -78,13 +78,14 @@ existing first.
 | Column | Type | Notes |
 |---|---|---|
 | `id` | primary key | Returned to plugins as `_id`. |
-| `plugin` | string(255) | The plugin **name**. |
-| `collection` | string(255) | |
-| `key` | string(255), nullable | |
+| `plugin` | string, at least 191 | The plugin **name**. |
+| `collection` | string, at least 100 | |
+| `key` | string, at least 191, nullable | |
 | `data` | JSON (text where the DB has no JSON type) | |
 | `created_at`, `updated_at` | timestamps | |
 
-Index `(plugin, collection, key)`. Config lives in the row with
+Index `(plugin, collection, key)`; keep the three lengths small enough for
+MySQL's index limit (191 + 100 + 191 characters fits). Config lives in the row with
 `collection = '__config__'` and `key = '__config__'`; `ctx.config.set` merges
 into it. Uninstalling a plugin keeps its store rows; reinstalling finds them.
 
@@ -237,7 +238,7 @@ The payload carries both shapes the official plugins read:
 | `ticket.tag_added`, `ticket.tag_removed` | Ticket, flat, plus `ticket`, `tag` (`{id, name, slug}`). |
 | `reply.created`, `note.created` | The reply, flat, plus `reply` and `ticket`. |
 | `sla.warning`, `sla.breached` | Ticket, flat, plus `ticket`, `type`. |
-| `chat.*` | `{session, ticket}` where the host has them. |
+| `chat.*` | `{session}`: `session_id`, `ticket_id`, `status`, `agent_id`, `department_id`, plus the event's extras. Never the visitor's token or email. |
 
 The ticket object is snake_case and carries at least `id`, `reference`,
 `subject`, `title` (same as `subject`; the SDK's `Ticket` type reads `title`),
@@ -253,8 +254,9 @@ event or a lifecycle action, so emitted names that collide are dropped.
 ### Filters
 
 `applyFilter(hook, value)` runs active plugins' `filters` in ascending
-`priority` (default 10) and returns the result; on any error or timeout (5 s)
-it returns the value it was given. This version of the contract requires no
+`priority` (default 10) and returns the result. A filter that throws or times
+out (5 s) is skipped and the value carries on to the next one, as the runtime
+does. This version of the contract requires no
 particular filter point. A host lists the filter hooks it applies in its plugin
 docs; Laravel applies `import.adapters`.
 
@@ -276,8 +278,9 @@ it is serving and ignores a `plugin` parameter that names another.
 | `ctx.store.get/set(collection, key[, value])` | One row by key. `set` upserts. |
 | `ctx.store.query(collection, filter, options)` | Equality, `$gt $gte $lt $lte $ne $in $nin` on dotted field names matching `^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)*$` (anything else is an error, never SQL). `options`: `limit`, `orderBy`, `order`. Returns `data` merged with `_id`. |
 | `ctx.store.insert/update/delete` | `insert` takes `key` from `data.key`; `update` merges. |
-| `ctx.tickets.find/query/create/update` | Through the host's ticket service, so events fire. `create`/`update` accept only `subject`/`title`, `body`/`description`, `priority`, `status`, `department_id`, `ticket_type`. |
-| `ctx.replies.find/query/create` | `create` requires `ticket_id` and `body`. |
+| `ctx.tickets.find/query/create/update` | Through the host's ticket service, so events fire. `create` accepts only `subject`/`title`, `body`/`description`, `priority`, `status` (slug), `department_id`, `ticket_type`, `channel` (default `api`), `metadata`, and `contact_id` or `requester_email`/`requester_name` (a contact, found or created). `update` accepts the same minus channel and requester. `query` filters only on `id`, `reference`, `status`, `priority`, `channel`, `ticket_type`, `department_id`, `requester_id`, `contact_id`, `assigned_to`; any other key is an error, never a column name. Cap the rows (NestJS: 500). |
+| `ctx.replies.find/query/create` | `create` requires `ticket_id` and `body`; `is_internal: true` makes a note. `query` filters on `ticket_id`, `is_internal`, `type`. |
+| *acting user* | Writes act as the signed-in user of the request the plugin is serving, or as no user (0) outside a request. A plugin never names the actor or the requester id. |
 | `ctx.contacts.find/findByEmail/create` | `name`, `email`. |
 | `ctx.tags.all/create`, `ctx.departments.all/find`, `ctx.agents.all/find` | Read models as the host's API serializes them. |
 | `ctx.broadcast.toChannel/toUser/toTicket` | Through the host's broadcaster; a no-op where it has none. |
@@ -323,12 +326,14 @@ plugins' manifests. This is the shape `usePluginExtensions()` reads:
 
 | Key | Built from | Item |
 |---|---|---|
-| `menuItems` | `pages[].menu` | `{label, route: <page URL>, icon, position, section, plugin}` |
+| `menuItems` | `pages[].menu` | `{label, route: <page URL>, icon, position (default 100), section (default admin), plugin}` |
 | `pageComponents` | `components[]` | Map of `"{page}.{slot}"` to `[{plugin, component, data: props, position: order}]` |
 | `dashboardWidgets` | `widgets[]` | `{id: "{slug}.{component}", title: label, component, plugin, position: order, width: size}` |
 
-An item with a `capability` the viewer lacks is left out. With no active
-plugins, send `escalated.plugins` as `{}`.
+`plugin` here is the **slug**: the frontend loads slot and widget components
+from a directory named after it. An item with a `capability` the viewer lacks
+is left out, and `admin` menu items go to admins only. With no active plugins,
+send `escalated.plugins` as `{}`.
 
 ## Security
 
@@ -366,6 +371,18 @@ Recorded on 2026-10-29. Fix the backend, then strike the line.
 - Adonis mounts endpoints at `{prefix}/plugins/{slug}/api/...` and webhooks at
   `{prefix}/plugins/{slug}/webhooks/...`.
 - Laravel's `ContextHandler` trusts a `plugin` parameter from the runtime.
+- Laravel's `ctx.tickets.query` and `ctx.replies.query` use the filter's keys
+  as column names, and `ctx.replies.create` mass-assigns whatever it is given.
+
+## Status by backend
+
+| Backend | State (2026-10-29) |
+|---|---|
+| Laravel | Port of record, with the gaps above. |
+| Rails, Django, Adonis, WordPress | Bridge plus native plugins; not yet checked against this doc. |
+| Phoenix | Native plugins registered in config, `can_upload: false`; no SDK bridge. |
+| NestJS | In-process SDK plugins, full contract (escalated-nestjs #193, #194). The reference for the ports below. |
+| .NET, Spring, Symfony, Go | None yet. |
 
 ---
 
