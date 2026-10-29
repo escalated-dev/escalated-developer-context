@@ -416,7 +416,7 @@ Through the host's real HTTP stack, with a stand-in SDK plugin (a
 - [ ] Creating a ticket over HTTP delivers `ticket.created` to an active plugin with the flat ticket and `ticket`; nothing to an inactive one.
 - [ ] A reply delivers `reply.created` with `reply` and `ticket`; no legacy name is ever delivered.
 - [ ] A plugin action that throws does not fail the request that fired it.
-- [ ] Filters run in priority order and a throwing filter returns the input.
+- [ ] Filters run in priority order, only for active plugins, and a throwing filter is skipped.
 - [ ] `ctx.config.set` merges; `ctx.store.query` handles the operators and rejects a field name with SQL in it; one plugin cannot read another's rows through `ctx`.
 - [ ] `escalated.plugins` carries `menuItems`, `pageComponents` and `dashboardWidgets` for active plugins only.
 
