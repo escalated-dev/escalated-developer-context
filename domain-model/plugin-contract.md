@@ -1,0 +1,407 @@
+# Plugin contract
+
+What every backend provides so that a plugin, and the shared admin screens for
+plugins, work the same on all eleven hosts. The plugin authoring API is
+`@escalated-dev/plugin-sdk` (`definePlugin`). The screens are
+`Escalated/Admin/Plugins/Index` and `Escalated/Plugin/Page` in
+`@escalated-dev/escalated`. This doc says what a host does between the two.
+
+escalated-laravel is the port of record. Where this doc and Laravel differ, the
+difference is listed under [Known gaps](#known-gaps) and Laravel is the one to
+fix.
+
+## Why this exists
+
+Six backends (Laravel, Rails, Django, Adonis, WordPress, Phoenix) grew a plugin
+system one at a time, each from the one before. Five (NestJS, .NET, Spring,
+Symfony, Go) had none. Nothing written said which parts were the contract and
+which were Laravel's PHP idioms, so the copies drifted: Adonis mounts plugin
+endpoints at `/plugins/{name}/api/...` and Laravel at `/api/plugins/{name}/...`;
+Laravel shares the plugin menu as `plugin_menu_items` while the frontend reads
+`escalated.plugins.menuItems`; nobody delivers domain events to SDK plugins.
+
+---
+
+## Two kinds of plugin
+
+| Kind | Written in | Runs | Who must support it |
+|---|---|---|---|
+| **SDK plugin** | TypeScript, `definePlugin()` | In the host process (Node hosts) or in the plugin runtime subprocess, over the [bridge](#the-sdk-bridge) | Every host. This is the cross-host plugin: the official plugins (`escalated-plugins`) are SDK plugins. |
+| **Native plugin** | The host's own language | In the host process | Optional. Laravel (PHP files and Composer packages), Rails, Django, Adonis and Phoenix have one. |
+
+Both kinds share one registry, one activation table and one admin screen. The
+rest of this doc is about SDK plugins unless it says otherwise.
+
+How a host runs SDK plugins:
+
+- **Node hosts (NestJS, Adonis)** may load them in-process: the host imports
+  the `definePlugin()` object and calls its handlers with a `ctx` it builds
+  itself. No subprocess, and activation gates every call per plugin.
+- **Every other host** spawns `@escalated-dev/plugin-runtime` and speaks
+  JSON-RPC 2.0 to it over stdio. That is opt-in by config and off when Node is
+  not installed; the host must start and serve requests without it.
+
+## Identity
+
+- **`name`** is the SDK manifest `name` (`@escalated-dev/plugin-slack`). The
+  store and config are keyed by it, and the runtime addresses plugins by it.
+- **`slug`** is what goes in URLs, route names and the `escalated_plugins` row:
+  the name with a leading `@` removed, each `/` replaced by `--`, and anything
+  else outside `[A-Za-z0-9_-]` replaced by `-`. So
+  `@escalated-dev/plugin-slack` is `escalated-dev--plugin-slack`. Native
+  plugins use their directory or package slug (Laravel: `acme--billing`).
+
+Two plugins with the same slug is a configuration error. Fail at boot and name
+both.
+
+## Storage
+
+Two tables, prefixed like every other table. Migrations must run on every
+database the host advertises.
+
+**`escalated_plugins`**: one row per plugin that has ever been activated.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | primary key | |
+| `slug` | string(255), unique | |
+| `is_active` | boolean, default false | |
+| `activated_at` | timestamp, nullable | |
+| `deactivated_at` | timestamp, nullable | |
+| `created_at`, `updated_at` | timestamps | |
+
+A registered plugin with no row is inactive. Activation never depends on a row
+existing first.
+
+**`escalated_plugin_store`**: everything `ctx.store` and `ctx.config` write.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | primary key | Returned to plugins as `_id`. |
+| `plugin` | string(255) | The plugin **name**. |
+| `collection` | string(255) | |
+| `key` | string(255), nullable | |
+| `data` | JSON (text where the DB has no JSON type) | |
+| `created_at`, `updated_at` | timestamps | |
+
+Index `(plugin, collection, key)`. Config lives in the row with
+`collection = '__config__'` and `key = '__config__'`; `ctx.config.set` merges
+into it. Uninstalling a plugin keeps its store rows; reinstalling finds them.
+
+---
+
+## Admin screen: `Escalated/Admin/Plugins/Index`
+
+All under `{prefix}/admin/plugins`, behind the host's admin guard. The route
+names are part of the contract: the page calls them through `route()`.
+
+| Method | Path | Route name | Does |
+|---|---|---|---|
+| GET | `/plugins` | `escalated.admin.plugins.index` | Renders the page. |
+| POST | `/plugins/upload` | `escalated.admin.plugins.upload` | Upload hosts only. Multipart field `plugin`. |
+| POST | `/plugins/{slug}/activate` | `escalated.admin.plugins.activate` | [Activate](#lifecycle). |
+| POST | `/plugins/{slug}/deactivate` | `escalated.admin.plugins.deactivate` | [Deactivate](#lifecycle). |
+| DELETE | `/plugins/{slug}` | `escalated.admin.plugins.destroy` | [Uninstall](#lifecycle). |
+
+Every POST and DELETE answers with a redirect to the index (303, the Inertia
+protocol) and a `success` or `error` flash. An unknown slug is an `error` flash
+on Inertia requests and a 404 on JSON ones.
+
+### Props
+
+| Prop | Type | Notes |
+|---|---|---|
+| `plugins` | array of [plugin objects](#the-plugin-object) | Every registered plugin, active or not. |
+| `can_upload` | boolean | `false` when plugins are installed by the deployer (package manager, module config) rather than uploaded. The page then hides upload. A host that sends `false` does not register the upload route. |
+
+### The plugin object
+
+| Key | Type | Notes |
+|---|---|---|
+| `slug` | string | |
+| `name` | string | Display name. |
+| `description` | string or null | |
+| `version` | string | |
+| `author` | string or null | |
+| `author_url`, `homepage` | string or null | The page links `homepage`; Laravel sends `author_url`. Send both. |
+| `is_active` | boolean | |
+| `activated_at` | ISO 8601 or null | |
+| `installed_at` | ISO 8601 or null | Optional. |
+| `source` | string | `local` (uploaded files), `composer` (managed by a package manager: Composer, npm, NuGet, Maven, Go modules; the name is historical), or `registered` (code-registered in module config). |
+| `provides` | object or omitted | `{menu_items, widgets, page_components}` counts from the manifest. |
+
+The page offers Delete for every source except `composer`.
+
+## Lifecycle
+
+Each transition runs in this order. A plugin callback that throws is logged
+with the plugin's name and does not undo the transition or fail the request.
+Every transition is idempotent: activating an active plugin is a success that
+does nothing.
+
+**Activate**: upsert the row with `is_active = true`,
+`activated_at = now`, `deactivated_at = null`; then call the plugin's
+`onActivate(ctx)` (runtime: the `activate` RPC); then fire the action
+`plugin.activated` with `{plugin: name, slug}`.
+
+**Deactivate**: fire `plugin.deactivated` while the plugin is still active,
+so it can react; call `onDeactivate(ctx)` (runtime: `deactivate`); then set
+`is_active = false`, `deactivated_at = now`.
+
+**Uninstall** (`DELETE`):
+
+- `composer`: refuse with an `error` flash. The package manager removes it.
+- Otherwise fire `plugin.uninstalling`, deactivate as above, and delete the
+  `escalated_plugins` row. A `local` plugin's files are deleted too. A
+  `registered` plugin stays in the list, inactive, because its code is still in
+  the build.
+
+Lifecycle actions go to every active plugin, the subject included. Native
+plugin systems may also fire their legacy names
+(`escalated_plugin_activated_{slug}` and so on); SDK plugins only see the
+dotted ones.
+
+### Uploads
+
+Only on hosts that send `can_upload: true`:
+
+- Admin only, and platform admin in tenant mode (where nothing runs anyway).
+- ZIP, at most 50 MB, one root folder holding `plugin.json`.
+- Reject any entry with `..`, an absolute path or a drive letter before
+  extracting (zip slip), and a `main_file` that does the same.
+- Never overwrite an installed plugin. Uploading does not activate.
+
+## Pages: `Escalated/Plugin/Page`
+
+Each `pages[]` entry of an **active** plugin's manifest is a route:
+
+```
+GET {prefix}/admin/plugins/{slug}/{route}
+name: escalated.plugin.{slug}.page.{route, "/" replaced by "--"}
+```
+
+Leading slashes on `route` are dropped; an entry with an empty `route` or
+`component` is skipped with a warning. The route sits behind the admin guard
+and, when the page declares `capability`, behind that too (403 without it).
+
+It renders `Escalated/Plugin/Page` with:
+
+| Prop | Value |
+|---|---|
+| `plugin` | The plugin name. |
+| `component` | The page's `component`. |
+| `layout` | The page's `layout`, default `admin`. |
+| `props` | The result of the plugin's own `GET /{component}` endpoint, or `{}` when it has none or it throws. |
+
+The page resolves `component` from components the plugin's frontend package
+registered with `defineEscalatedPlugin`. An inactive or unknown plugin's page is
+a 404.
+
+## Endpoints and webhooks
+
+Transport details (`httpContract: 1`, raw body, stripped headers, the
+`httpResponse()` envelope) are in the SDK's `docs/http-contract.md` and
+Laravel's `docs/plugin-http-contract.md`. Routing:
+
+| Kind | Route | Guard |
+|---|---|---|
+| Endpoint | `{METHOD} {prefix}/api/plugins/{slug}{path}` | Admin guard, plus `capability` when declared (403). |
+| Webhook | `{METHOD} {prefix}/webhooks/plugins/{slug}{path}` | None. The plugin authenticates the sender. |
+
+- Manifest paths may contain `:param` segments. Match them, send the values as
+  `params`, and dispatch on the manifest path, not the request path.
+- Only active plugins answer; anything else is a 404.
+- Strip `Cookie`, `Authorization`, `X-XSRF-TOKEN`, `X-CSRF-TOKEN` and `Proxy-*`
+  before a plugin sees the headers.
+- A plugin's ordinary return value is JSON with 200. A handler that throws is a
+  500 with a generic message; the error goes to the log, not the client.
+
+## Hooks
+
+### Actions: the canonical events
+
+Every host delivers the canonical events of
+[ADR 2026-10-21](../decisions/2026-10-21-event-vocabulary.md) to active
+plugins' `actions`, under exactly those names, after the change is committed.
+Legacy names are never delivered.
+
+The payload carries both shapes the official plugins read:
+
+| Events | Payload |
+|---|---|
+| `ticket.created`, `ticket.updated`, `ticket.resolved`, `ticket.closed`, `ticket.reopened`, `ticket.escalated`, `ticket.unassigned` | The ticket, flat, plus `ticket` (the same object). |
+| `ticket.status_changed` | Ticket, flat, plus `ticket`, `old_status`, `new_status`. |
+| `ticket.assigned` | Ticket, flat, plus `ticket`, `agent_id`. |
+| `ticket.priority_changed` | Ticket, flat, plus `ticket`, `old_priority`, `new_priority`. |
+| `ticket.department_changed` | Ticket, flat, plus `ticket`, `old_department_id`, `new_department_id`. |
+| `ticket.tag_added`, `ticket.tag_removed` | Ticket, flat, plus `ticket`, `tag` (`{id, name, slug}`). |
+| `reply.created`, `note.created` | The reply, flat, plus `reply` and `ticket`. |
+| `sla.warning`, `sla.breached` | Ticket, flat, plus `ticket`, `type`. |
+| `chat.*` | `{session, ticket}` where the host has them. |
+
+The ticket object is snake_case and carries at least `id`, `reference`,
+`subject`, `title` (same as `subject`; the SDK's `Ticket` type reads `title`),
+`status`, `priority`, `department_id`, `assigned_to`, `requester_id`,
+`metadata`, `created_at`, `updated_at`.
+
+Actions are fire-and-forget: a slow or failing plugin never fails or delays the
+request that caused the event past the dispatch timeout (30 s on the bridge).
+`ctx.emit(hook, data)` fires an action of the plugin's choosing to every
+active plugin; hosts must not let an emitted name impersonate a canonical
+event or a lifecycle action, so emitted names that collide are dropped.
+
+### Filters
+
+`applyFilter(hook, value)` runs active plugins' `filters` in ascending
+`priority` (default 10) and returns the result; on any error or timeout (5 s)
+it returns the value it was given. This version of the contract requires no
+particular filter point. A host lists the filter hooks it applies in its plugin
+docs; Laravel applies `import.adapters`.
+
+### Lifecycle actions
+
+`plugin.activated`, `plugin.deactivated`, `plugin.uninstalling`, payload
+`{plugin, slug}`. See [Lifecycle](#lifecycle).
+
+## The plugin context (`ctx`)
+
+Hosts implement the SDK's `PluginContext`. In-process hosts build the object;
+bridge hosts answer the `ctx.*` RPC methods below. Every method is scoped to
+the plugin being dispatched; a bridge host takes the plugin from the dispatch
+it is serving and ignores a `plugin` parameter that names another.
+
+| Method | Contract |
+|---|---|
+| `ctx.config.all` / `get(key)` / `set(data)` | The `__config__` row. `set` merges. |
+| `ctx.store.get/set(collection, key[, value])` | One row by key. `set` upserts. |
+| `ctx.store.query(collection, filter, options)` | Equality, `$gt $gte $lt $lte $ne $in $nin` on dotted field names matching `^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)*$` (anything else is an error, never SQL). `options`: `limit`, `orderBy`, `order`. Returns `data` merged with `_id`. |
+| `ctx.store.insert/update/delete` | `insert` takes `key` from `data.key`; `update` merges. |
+| `ctx.tickets.find/query/create/update` | Through the host's ticket service, so events fire. `create`/`update` accept only `subject`/`title`, `body`/`description`, `priority`, `status`, `department_id`, `ticket_type`. |
+| `ctx.replies.find/query/create` | `create` requires `ticket_id` and `body`. |
+| `ctx.contacts.find/findByEmail/create` | `name`, `email`. |
+| `ctx.tags.all/create`, `ctx.departments.all/find`, `ctx.agents.all/find` | Read models as the host's API serializes them. |
+| `ctx.broadcast.toChannel/toUser/toTicket` | Through the host's broadcaster; a no-op where it has none. |
+| `ctx.log` | The host log, with the plugin name attached. |
+| `ctx.emit(hook, data)` | See [Actions](#actions-the-canonical-events). |
+| `ctx.currentUser()` | The user of the request being served, or `null`. |
+| `ctx.http` | Runs in the plugin's own process; not a host method. |
+
+## The SDK bridge
+
+For hosts that run `@escalated-dev/plugin-runtime`.
+
+- **Spawn**: `node node_modules/@escalated-dev/plugin-runtime/build/bin/escalated-plugins.js`
+  in the host's project directory, both configurable. Lazily, on first use.
+- **Framing**: one JSON-RPC 2.0 message per line on stdin/stdout, at most
+  10 MB. stderr is logs.
+- **Handshake** first: send `{protocol_version: "1.0", host, host_version}`;
+  refuse a runtime that does not answer `compatible: true`. Endpoint and
+  webhook calls need `http_contract_versions` to contain `1`; otherwise answer
+  them 503.
+- **Host to runtime**: `handshake`, `manifest` (a map of name to manifest),
+  `action {hook, event}`, `filter {hook, value}`,
+  `endpoint {plugin, method, path, body, params, query, headers, ...}`,
+  `webhook {...}`, `activate {plugin}`, `deactivate {plugin}`, `ping`,
+  `cron {plugin, schedule}`, `badge {plugin, component}`.
+- **Runtime to host**: the `ctx.*` methods above, which can arrive while the
+  host waits for its own answer. Serve them in that wait.
+- **Timeouts**: handshake and manifest 15 s, action 30 s, filter 5 s, endpoint
+  30 s, webhook 60 s.
+- **Failure**: a dead runtime is restarted on next use with exponential backoff
+  capped at 5 minutes. Meanwhile actions are dropped with a warning, filters
+  return their input, and endpoints answer 503.
+- **Activation**: the runtime loads and dispatches to every installed plugin.
+  Until it accepts an allow-list, a bridge host must not send `endpoint`,
+  `webhook`, `cron` or `badge` for an inactive plugin, and passes
+  `plugins: [active names]` on `action` and `filter` so a runtime that honours
+  it can gate them.
+
+## UI extensions
+
+Shared on every Escalated page as `escalated.plugins`, built from **active**
+plugins' manifests. This is the shape `usePluginExtensions()` reads:
+
+| Key | Built from | Item |
+|---|---|---|
+| `menuItems` | `pages[].menu` | `{label, route: <page URL>, icon, position, section, plugin}` |
+| `pageComponents` | `components[]` | Map of `"{page}.{slot}"` to `[{plugin, component, data: props, position: order}]` |
+| `dashboardWidgets` | `widgets[]` | `{id: "{slug}.{component}", title: label, component, plugin, position: order, width: size}` |
+
+An item with a `capability` the viewer lacks is left out. With no active
+plugins, send `escalated.plugins` as `{}`.
+
+## Security
+
+- **Who installs**: whoever deploys the host. Code-registered and
+  package-managed plugins are added by changing the build; uploads (where a
+  host allows them) need an admin. Activation, deactivation and uninstall need
+  an admin.
+- **Sandboxing**: an in-process plugin is trusted host code with the host's
+  privileges. The runtime subprocess keeps plugin code out of the host's memory
+  and database connection, but all SDK plugins share one Node process and the
+  network, so it isolates the host from plugins, not plugins from each other.
+  Store scoping by plugin name is a correctness guarantee, not a security
+  boundary between plugins.
+- **Tenant mode**: no plugin code runs when the host serves several tenants
+  from one install. Hosts with tenant mode answer the admin plugin routes 403,
+  register no plugin pages, endpoints or webhooks, and deliver no hooks, until
+  the runtime can isolate tenants.
+- **Inactive means inert**: no hooks, no routes (404), no UI extensions, no
+  cron.
+- **Secrets**: plugin config may hold API keys. Never serialize `ctx.config`
+  into the Index page or the shared props.
+
+## Known gaps
+
+Recorded on 2026-10-29. Fix the backend, then strike the line.
+
+- Laravel shares `plugin_menu_items`, `plugin_dashboard_widgets` and
+  `plugin_pages`; the frontend reads `escalated.plugins.*`. Plugin menus,
+  widgets and slots are empty on Laravel.
+- Laravel delivers no canonical events to SDK plugins; it dual-dispatches only
+  what its code fires through `escalated_do_action` (`import.completed`).
+- Laravel mounts SDK plugin routes on the raw name (`@scope/pkg`), not the slug.
+- Laravel's bridge never sends `activate`/`deactivate`, and dispatches to
+  inactive SDK plugins.
+- Adonis mounts endpoints at `{prefix}/plugins/{slug}/api/...` and webhooks at
+  `{prefix}/plugins/{slug}/webhooks/...`.
+- Laravel's `ContextHandler` trusts a `plugin` parameter from the runtime.
+
+---
+
+## Port test checklist
+
+Through the host's real HTTP stack, with a stand-in SDK plugin (a
+`definePlugin()` object, or a fake runtime for bridge hosts).
+
+**Admin screen**
+
+- [ ] GET `/admin/plugins` as admin renders `Escalated/Admin/Plugins/Index` with `plugins` and `can_upload`; each plugin object has `slug`, `name`, `version`, `is_active`, `source`.
+- [ ] As an agent, a customer and a guest: refused, and the page is not rendered.
+- [ ] Activate, then deactivate: 303 to the index, `success` flash, row state and timestamps; idempotent on repeat.
+- [ ] Unknown slug: `error` flash (Inertia) or 404 (JSON); no row created.
+- [ ] Uninstall a `registered` plugin: row gone, plugin still listed, inactive, store rows kept. A `composer` plugin: refused.
+- [ ] `can_upload: false` hosts: POST `/admin/plugins/upload` is 404.
+- [ ] Upload hosts: zip slip, missing `plugin.json` and an existing slug are refused.
+- [ ] `onActivate`, `onDeactivate`, `plugin.activated`, `plugin.deactivated`, `plugin.uninstalling` fire in the documented order; a throwing callback does not undo the transition.
+
+**Pages, endpoints, webhooks**
+
+- [ ] An active plugin's page renders `Escalated/Plugin/Page` with `plugin`, `component`, `layout`, and `props` from `GET /{component}`, or `{}`.
+- [ ] The same page for an inactive plugin, and for a non-admin: 404 and refused.
+- [ ] A page or endpoint with a `capability` the user lacks: 403.
+- [ ] An endpoint with `:id` in its path receives `params.id`, `query`, `body`, and no `cookie` or `authorization` header.
+- [ ] A webhook answers without auth; an inactive plugin's webhook is a 404.
+- [ ] A throwing endpoint is a 500 without the error message.
+
+**Hooks and context**
+
+- [ ] Creating a ticket over HTTP delivers `ticket.created` to an active plugin with the flat ticket and `ticket`; nothing to an inactive one.
+- [ ] A reply delivers `reply.created` with `reply` and `ticket`; no legacy name is ever delivered.
+- [ ] A plugin action that throws does not fail the request that fired it.
+- [ ] Filters run in priority order and a throwing filter returns the input.
+- [ ] `ctx.config.set` merges; `ctx.store.query` handles the operators and rejects a field name with SQL in it; one plugin cannot read another's rows through `ctx`.
+- [ ] `escalated.plugins` carries `menuItems`, `pageComponents` and `dashboardWidgets` for active plugins only.
+
+**Page-name parity**: take `Escalated/Admin/Plugins/Index` and
+`Escalated/Plugin/Page` off the "not rendered yet" list.

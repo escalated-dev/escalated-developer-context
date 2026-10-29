@@ -82,6 +82,8 @@ For the "why" behind a term, follow the link into `domain-model/`.
 
 **NestJS reference** — `escalated-nestjs`. The canonical implementation. New features land here first; the 10 host plugins mirror from it.
 
+**Plugin** — an extension built with `@escalated-dev/plugin-sdk` (`definePlugin`), or in a host's own language. Not the same thing as a *host plugin*. Activated per install in Admin > Plugins; receives the canonical events as actions. See [plugin-contract](domain-model/plugin-contract.md).
+
 **Host plugin** — a framework-specific package (`escalated-laravel`, `escalated-rails`, etc.) that installs Escalated into an existing host app. Shares the Vue frontend but has its own backend, migrations, and idioms.
 
 **Shared frontend** — `@escalated-dev/escalated`, the Vue 3 + Inertia UI package. Every framework's backend serves it the same way.
