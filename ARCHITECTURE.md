@@ -187,6 +187,10 @@ The shared frontend (`@escalated-dev/escalated`) provides Vue 3 pages and compon
 
 The plugin system is a three-layer architecture:
 
+What each backend must provide (admin routes and props, lifecycle, hooks, the
+bridge protocol, security) is in
+[`domain-model/plugin-contract.md`](domain-model/plugin-contract.md).
+
 ### Layer 1: Plugin SDK (`@escalated-dev/plugin-sdk`)
 
 TypeScript SDK for authoring plugins. Provides `definePlugin()` with support for:

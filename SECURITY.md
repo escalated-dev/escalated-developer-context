@@ -151,7 +151,7 @@ Plugins run in a **separate Node.js process** (the plugin runtime), not in the h
 1. **Process isolation**: Plugins cannot access the host framework's memory, filesystem, or database directly
 2. **Controlled API surface**: Plugins can only interact with the host through the `PluginContext` (`ctx.*`) API
 3. **Capability-based endpoints**: Plugin REST endpoints can require specific capabilities (`manage_settings`, `manage_tickets`)
-4. **Data scoping**: `ctx.store` is scoped to the plugin -- plugins cannot read other plugins' data
+4. **Data scoping**: `ctx.store` is scoped to the plugin. All SDK plugins share one runtime process, so this keeps plugins apart by contract, not as a security boundary between them (see [`domain-model/plugin-contract.md`](domain-model/plugin-contract.md#security))
 5. **Rate limiting**: Plugin HTTP calls and data operations are rate-limited
 6. **Logging**: All plugin operations are logged for audit
 

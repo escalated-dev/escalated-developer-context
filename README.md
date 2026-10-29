@@ -15,7 +15,7 @@ Three hosting modes let teams run fully self-hosted, sync to a central cloud, or
 | Path | What It Covers |
 |------|----------------|
 | [`glossary.md`](glossary.md) | One-line definitions of Escalated-specific terms. Start here if a term is ambiguous. |
-| [`domain-model/`](domain-model/) | Canonical explanations of core concepts (ticketing, workflows, guest policy, email threading). |
+| [`domain-model/`](domain-model/) | Canonical explanations of core concepts (ticketing, workflows, guest policy, email threading, the plugin contract). |
 | [`decisions/`](decisions/) | ADRs — locked architectural decisions, dated, append-only. |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | System architecture: hosting modes, driver pattern, plugin system, event model |
 | [`CONVENTIONS.md`](CONVENTIONS.md) | Code style, naming, database, git, and testing conventions |
