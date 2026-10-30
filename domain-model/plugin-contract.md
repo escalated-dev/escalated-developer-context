@@ -403,19 +403,32 @@ send `escalated.plugins` as `{}`.
 
 Recorded on 2026-10-29. Fix the backend, then strike the line.
 
-- Laravel shares `plugin_menu_items`, `plugin_dashboard_widgets` and
-  `plugin_pages`; the frontend reads `escalated.plugins.*`. Plugin menus,
-  widgets and slots are empty on Laravel.
-- Laravel delivers no canonical events to SDK plugins; it dual-dispatches only
-  what its code fires through `escalated_do_action` (`import.completed`).
+- ~~Laravel shares `plugin_menu_items`, `plugin_dashboard_widgets` and
+  `plugin_pages`; the frontend reads `escalated.plugins.*`.~~ Fixed in
+  escalated-laravel #272.
+- ~~Laravel delivers no canonical events to SDK plugins.~~ Fixed in
+  escalated-laravel #272.
 - Laravel mounts SDK plugin routes on the raw name (`@scope/pkg`), not the slug.
-- Laravel's bridge never sends `activate`/`deactivate`, and dispatches to
-  inactive SDK plugins.
+- ~~Laravel's bridge never sends `activate`/`deactivate`, and dispatches to
+  inactive SDK plugins.~~ Fixed in escalated-laravel #280 (and Rails #131,
+  Adonis #216): SDK plugins are listed, activated and deactivated on
+  Admin > Plugins, and hooks, cron, badges, UI extensions and routes reach
+  active ones only. SDK plugins already installed the first time a host
+  records them are kept active, so upgrades switch nothing off.
 - Adonis mounts endpoints at `{prefix}/plugins/{slug}/api/...` and webhooks at
   `{prefix}/plugins/{slug}/webhooks/...`.
+- Rails mounts SDK endpoints at `{prefix}/plugins/{name}/api/...` and webhooks
+  at `{prefix}/plugins/{name}/webhooks/...` (the name with everything outside
+  `[a-z0-9_-]` dropped), draws them with `Engine.routes.draw`, and has no SDK
+  plugin pages.
+- `@escalated-dev/plugin-runtime` ignores the `plugins` list on `action` and
+  `filter`, so a bridge host cannot stop an inactive plugin's handler from
+  running. Laravel and Rails refuse that plugin's `ctx.*` calls (except
+  `ctx.log`) meanwhile.
 - Laravel's `ContextHandler` trusts a `plugin` parameter from the runtime.
-- Laravel's `ctx.tickets.query` and `ctx.replies.query` use the filter's keys
-  as column names, and `ctx.replies.create` mass-assigns whatever it is given.
+- ~~Laravel's `ctx.tickets.query` and `ctx.replies.query` use the filter's keys
+  as column names~~ (fixed in escalated-laravel #272), and `ctx.replies.create`
+  mass-assigns whatever it is given.
 
 ## Status by backend
 
