@@ -323,11 +323,13 @@ For hosts that run `@escalated-dev/plugin-runtime`.
 - **Failure**: a dead runtime is restarted on next use with exponential backoff
   capped at 5 minutes. Meanwhile actions are dropped with a warning, filters
   return their input, and endpoints answer 503.
-- **Activation**: the runtime loads and dispatches to every installed plugin.
-  Until it accepts an allow-list, a bridge host must not send `endpoint`,
-  `webhook`, `cron` or `badge` for an inactive plugin, and passes
-  `plugins: [active names]` on `action` and `filter` so a runtime that honours
-  it can gate them.
+- **Activation**: the runtime loads every installed plugin. A bridge host
+  must not send `endpoint`, `webhook`, `cron` or `badge` for an inactive
+  plugin, and passes `plugins: [active names]` on `action` and `filter`.
+  Runtimes that answer the handshake with `active_plugin_lists: true` run only
+  the listed plugins' handlers (and accept the same list on `endpoint`,
+  `webhook`, `cron` and `badge`); with an older runtime the host must still
+  refuse an inactive plugin's `ctx.*` calls.
 
 ### Cron
 
@@ -408,7 +410,8 @@ Recorded on 2026-10-29. Fix the backend, then strike the line.
   escalated-laravel #272.
 - ~~Laravel delivers no canonical events to SDK plugins.~~ Fixed in
   escalated-laravel #272.
-- Laravel mounts SDK plugin routes on the raw name (`@scope/pkg`), not the slug.
+- ~~Laravel mounts SDK plugin routes on the raw name (`@scope/pkg`), not the
+  slug.~~ Fixed in escalated-laravel #281.
 - ~~Laravel's bridge never sends `activate`/`deactivate`, and dispatches to
   inactive SDK plugins.~~ Fixed in escalated-laravel #280 (and Rails #131,
   Adonis #216): SDK plugins are listed, activated and deactivated on
@@ -417,15 +420,19 @@ Recorded on 2026-10-29. Fix the backend, then strike the line.
   records them are kept active, so upgrades switch nothing off.
 - Adonis mounts endpoints at `{prefix}/plugins/{slug}/api/...` and webhooks at
   `{prefix}/plugins/{slug}/webhooks/...`.
-- Rails mounts SDK endpoints at `{prefix}/plugins/{name}/api/...` and webhooks
+- ~~Rails mounts SDK endpoints at `{prefix}/plugins/{name}/api/...` and webhooks
   at `{prefix}/plugins/{name}/webhooks/...` (the name with everything outside
   `[a-z0-9_-]` dropped), draws them with `Engine.routes.draw`, and has no SDK
-  plugin pages.
-- `@escalated-dev/plugin-runtime` ignores the `plugins` list on `action` and
+  plugin pages.~~ Fixed in escalated-rails #133.
+- ~~`@escalated-dev/plugin-runtime` ignores the `plugins` list on `action` and
   `filter`, so a bridge host cannot stop an inactive plugin's handler from
-  running. Laravel and Rails refuse that plugin's `ctx.*` calls (except
-  `ctx.log`) meanwhile.
-- Laravel's `ContextHandler` trusts a `plugin` parameter from the runtime.
+  running.~~ Fixed in escalated-plugin-runtime #9 (unreleased): it honours
+  `plugins` on `action`, `filter`, `endpoint`, `webhook`, `cron` and `badge`
+  and answers the handshake with `active_plugin_lists: true`. Until hosts
+  require a runtime with it, Laravel and Rails still refuse an inactive
+  plugin's `ctx.*` calls (except `ctx.log`).
+- ~~Laravel's `ContextHandler` trusts a `plugin` parameter from the runtime.~~
+  Fixed in escalated-laravel #281.
 - ~~Laravel's `ctx.tickets.query` and `ctx.replies.query` use the filter's keys
   as column names~~ (fixed in escalated-laravel #272), and `ctx.replies.create`
   mass-assigns whatever it is given.
