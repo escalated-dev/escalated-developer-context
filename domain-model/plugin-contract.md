@@ -350,6 +350,18 @@ for each such widget of an active plugin, as that viewer (acting user and
 as `badge` (a number, a string or `null`); a failure or timeout is `null`.
 Widgets without a badge function carry no `badge` key.
 
+### Native plugins
+
+Hosts with native plugins give them the same schedules and badges through an
+optional hook, with the same rules (active plugins only, UTC, no user and 30 s
+for cron; the viewer, 5 s and `null` on failure for badges; no `badge` key
+without one): Go `plugins.CronPlugin` / `plugins.BadgePlugin`, Spring
+`EscalatedPlugin.cron()` / `badges()`, .NET `IPluginCron` /
+`IPluginWidgetBadges`, Symfony `CronPluginInterface` /
+`WidgetBadgePluginInterface`. Laravel native widgets take a `badge` callable
+(called with the viewer); Laravel native plugins schedule work with Laravel's
+own scheduler.
+
 ## UI extensions
 
 Shared on every Escalated page as `escalated.plugins`, built from **active**
@@ -404,9 +416,6 @@ Recorded on 2026-10-29. Fix the backend, then strike the line.
 - Laravel's `ContextHandler` trusts a `plugin` parameter from the runtime.
 - Laravel's `ctx.tickets.query` and `ctx.replies.query` use the filter's keys
   as column names, and `ctx.replies.create` mass-assigns whatever it is given.
-- Laravel never sends `cron` or `badge`: SDK plugin schedules never run and
-  widget badges are never asked for. The shared frontend does not render a
-  widget's `badge` yet.
 
 ## Status by backend
 
