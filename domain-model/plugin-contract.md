@@ -251,6 +251,14 @@ request that caused the event past the dispatch timeout (30 s on the bridge).
 active plugin; hosts must not let an emitted name impersonate a canonical
 event or a lifecycle action, so emitted names that collide are dropped.
 
+Plugin `ctx` writes go through the ticket service, so they raise canonical
+events while the plugin that wrote is still handling its action. Hosts guard
+against a plugin re-triggering itself: while an action is being delivered to
+plugins, the same action is not delivered to plugins again, and nesting stops
+at three (Laravel's workflow re-entrancy guard, applied to plugin delivery).
+Where delivery is deferred (after commit, `setImmediate`), the chain travels
+with the event. Webhooks and workflows still see every event.
+
 ### Filters
 
 `applyFilter(hook, value)` runs active plugins' `filters` in ascending
@@ -448,9 +456,17 @@ Recorded on 2026-10-29. Fix the backend, then strike the line.
   anything else an error. NestJS, Symfony, Go, .NET and Spring already picked
   fields explicitly (Go and Spring refuse unknown keys; NestJS, Symfony and
   .NET ignore them).
-- Laravel, Rails, Django and Adonis write plugin tickets and replies through
+- ~~Laravel, Rails, Django and Adonis write plugin tickets and replies through
   the model, not the ticket service: model events fire, but ticket-service
-  side effects (activity log, SLA attach) do not.
+  side effects (activity log, SLA attach) do not.~~ Fixed in escalated-laravel
+  #284, escalated-rails #137, escalated-django #131 and escalated-adonis #221:
+  `ctx.tickets.create/update` and `ctx.replies.create` go through the ticket
+  service the API uses (status, priority and department changes as their own
+  service calls, so each is checked, logged and announced), with the acting
+  user as author and causer. While a plugin action is being delivered, the
+  same action raised by a plugin's own write is not delivered to plugins
+  again, and nesting stops at three (after Laravel's workflow re-entrancy
+  guard); webhooks and workflows still see every event.
 
 ## Status by backend
 
