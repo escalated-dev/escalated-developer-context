@@ -279,10 +279,11 @@ it is serving and ignores a `plugin` parameter that names another.
 | `ctx.store.query(collection, filter, options)` | Equality, `$gt $gte $lt $lte $ne $in $nin` on dotted field names matching `^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)*$` (anything else is an error, never SQL). `options`: `limit`, `orderBy`, `order`. Returns `data` merged with `_id`. |
 | `ctx.store.insert/update/delete` | `insert` takes `key` from `data.key`; `update` merges. |
 | `ctx.tickets.find/query/create/update` | Through the host's ticket service, so events fire. `create` accepts only `subject`/`title`, `body`/`description`, `priority`, `status` (slug), `department_id`, `ticket_type`, `channel` (default `api`), `metadata`, and `contact_id` or `requester_email`/`requester_name` (a contact, found or created). `update` accepts the same minus channel and requester. `query` filters only on `id`, `reference`, `status`, `priority`, `channel`, `ticket_type`, `department_id`, `requester_id`, `contact_id`, `assigned_to`; any other key is an error, never a column name. Cap the rows (NestJS: 500). |
-| `ctx.replies.find/query/create` | `create` requires `ticket_id` and `body`; `is_internal: true` makes a note. `query` filters on `ticket_id`, `is_internal`, `type`. |
+| `ctx.replies.find/query/create` | `create` takes only `ticket_id` (an existing ticket), `body` and `is_internal` (`true` makes a note). The author is the acting user (below), never a field. `query` filters on `ticket_id`, `is_internal`, `type`. |
+| *write fields* | Every `create`/`update` (tickets, replies, contacts, tags) refuses a key outside its listed fields with an error naming it, before writing anything. Never mass-assign, and never drop unknown keys silently: a plugin that sends `author_id`, `requester_id`, `assigned_to`, `is_internal_note` or a user model's admin flag gets an error, not a write. |
 | *acting user* | Writes act as the signed-in user of the request the plugin is serving, or as no user (0) outside a request. A plugin never names the actor or the requester id. A bridge host finds that request from the call's `host_call_id` (see [The SDK bridge](#the-sdk-bridge)). |
-| `ctx.contacts.find/findByEmail/create` | `name`, `email`. |
-| `ctx.tags.all/create`, `ctx.departments.all/find`, `ctx.agents.all/find` | Read models as the host's API serializes them. |
+| `ctx.contacts.find/findByEmail/create` | `create` takes `name`, `email` only. |
+| `ctx.tags.all/create`, `ctx.departments.all/find`, `ctx.agents.all/find` | Read models as the host's API serializes them. `ctx.tags.create` takes `name`, `slug`, `color`. |
 | `ctx.broadcast.toChannel/toUser/toTicket` | Through the host's broadcaster, as event `event` with payload `data`; a no-op where it has none. Laravel's channels: `plugin.{channel}` (public), `private-user.{userId}` (that user's connections), `private-ticket.{ticketId}` (connections allowed to see the ticket). Hosts with their own realtime transport map these to its rooms with the same audiences. |
 | `ctx.log` | The host log, with the plugin name attached. |
 | `ctx.emit(hook, data)` | See [Actions](#actions-the-canonical-events). |
@@ -418,8 +419,10 @@ Recorded on 2026-10-29. Fix the backend, then strike the line.
   Admin > Plugins, and hooks, cron, badges, UI extensions and routes reach
   active ones only. SDK plugins already installed the first time a host
   records them are kept active, so upgrades switch nothing off.
-- Adonis mounts endpoints at `{prefix}/plugins/{slug}/api/...` and webhooks at
-  `{prefix}/plugins/{slug}/webhooks/...`.
+- ~~Adonis mounts endpoints at `{prefix}/plugins/{slug}/api/...` and webhooks at
+  `{prefix}/plugins/{slug}/webhooks/...`.~~ Fixed in escalated-adonis #218,
+  which also strips credential headers, runs endpoints as the signed-in user
+  and answers a throwing handler 500 without its message.
 - ~~Rails mounts SDK endpoints at `{prefix}/plugins/{name}/api/...` and webhooks
   at `{prefix}/plugins/{name}/webhooks/...` (the name with everything outside
   `[a-z0-9_-]` dropped), draws them with `Engine.routes.draw`, and has no SDK
@@ -434,8 +437,20 @@ Recorded on 2026-10-29. Fix the backend, then strike the line.
 - ~~Laravel's `ContextHandler` trusts a `plugin` parameter from the runtime.~~
   Fixed in escalated-laravel #281.
 - ~~Laravel's `ctx.tickets.query` and `ctx.replies.query` use the filter's keys
-  as column names~~ (fixed in escalated-laravel #272), and `ctx.replies.create`
-  mass-assigns whatever it is given.
+  as column names~~ (fixed in escalated-laravel #272).
+- ~~`ctx` writes mass-assign what the plugin sends.~~ Laravel (`replies.create`,
+  `tags.create`; `tickets.create/update` dropped unknown keys and wrote a
+  `body` column that does not exist), Rails, Django and Adonis (tickets,
+  replies, contacts; Rails and Django tags too) let a plugin set a reply's
+  author or note flag, a ticket's requester or assignee, or a host user's
+  admin flag. Fixed in escalated-laravel #282, escalated-rails #135,
+  escalated-django #129 and escalated-adonis #219: only the contract's fields,
+  anything else an error. NestJS, Symfony, Go, .NET and Spring already picked
+  fields explicitly (Go and Spring refuse unknown keys; NestJS, Symfony and
+  .NET ignore them).
+- Laravel, Rails, Django and Adonis write plugin tickets and replies through
+  the model, not the ticket service: model events fire, but ticket-service
+  side effects (activity log, SLA attach) do not.
 
 ## Status by backend
 
