@@ -28,3 +28,4 @@ Each ADR has:
 | 2026-04-24 | [Admin vs agent tool split (Workflows / Automations / Macros)](2026-04-24-admin-agent-tool-split.md) | Accepted |
 | 2026-04-26 | [Automation + Macro backend parity (NestJS, Symfony, Phoenix, Go)](2026-04-26-automation-macro-backend-parity.md) | Accepted |
 | 2026-10-29 | [Roles & permissions, SSO and two-factor are per-install switches](2026-10-29-configurable-access-features.md) | Accepted |
+| 2026-11-05 | [Escalated's admin can be embedded in the host's own admin panel (optional)](2026-11-05-embeddable-admin.md) | Accepted |

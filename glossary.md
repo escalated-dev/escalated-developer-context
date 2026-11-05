@@ -78,6 +78,8 @@ For the "why" behind a term, follow the link into `domain-model/`.
 
 **Widget** — the `<script>` tag + Vue component embedded on a host site's public pages. Submits tickets via `POST /{prefix}/widget/tickets`. Prefix is `/support` by default, configurable via `data-widget-path`. Other sites can embed it only when their origin is on the backend's allow list (`widget_allowed_origins`); see ARCHITECTURE.md "Embedding on other sites".
 
+**Embedded admin** — optional (off by default) mode where Escalated's admin screens render inside the host's own admin panel instead of the standalone `/{prefix}/admin`: mounted under a host prefix + middleware (`ui.embed`), wrapped in the host's Vue layout (`layoutScope`), its root view, or an allow-listed iframe. The menu is shared as `escalated.navigation`. Not the same as the Widget. See ADR `2026-11-05-embeddable-admin`.
+
 ## Portfolio
 
 **NestJS reference** — `escalated-nestjs`. The canonical implementation. New features land here first; the 10 host plugins mirror from it.
