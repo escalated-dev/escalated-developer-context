@@ -216,7 +216,7 @@ absent and the routes answer 404.
 |---|---|---|
 | `ticket_assigned` | the new assignee | a ticket is assigned to them by someone else |
 | `ticket_reply` | the assignee and followers | a customer-side public reply (same rule as unread activity) |
-| `mention` | the mentioned agent | an @mention in an internal note (where the backend has mentions) |
+| `mention` | the mentioned agent | an @mention in a staff-authored reply or internal note (where the backend has mentions; see below) |
 | `sla_warning` | the assignee | an SLA target is about to be missed (`sla.warning`) |
 | `sla_breached` | the assignee | an SLA target was missed (`sla.breached`) |
 | `chat_transferred` | the receiving agent | a live chat is transferred to them |
@@ -226,6 +226,15 @@ A backend may send other Escalated types it already has (Laravel also stores
 unknown `type` with its `title` and a generic icon. Collision ("someone else is
 replying") is not a notification; it stays the ticket page's live presence.
 The agent who caused an event is never notified of it.
+
+**Who can mention.** Only staff-authored content mentions anyone: a public
+reply or internal note whose author is an agent or admin (the backend's staff
+check, including a tenant staff seat where tenancy is on). Content authored by a
+customer, a guest (no author) or a contact never creates a mention record or a
+`mention` notification, even when it names an agent with `@Name` or
+`@{Full Name}`. Customers must not be able to ping staff directly; their replies
+already reach the assignee and followers as `ticket_reply`. The author never
+mentions themselves.
 
 **Item shape.**
 
@@ -358,6 +367,9 @@ dotnet (WordPress: only what wp-admin's own UI can use, see below):
       the visibility redaction, the three routes, shared
       `notifications.unread_count`, `notification.created` on
       `escalated.agents.{id}` when broadcasting is on.
+- [ ] Mentions only from staff-authored replies and internal notes; a test
+      that a customer reply naming an agent creates no mention or
+      notification.
 - [ ] KB search: `escalated.agent.kb.search` with escaped `LIKE` or full-text,
       published (plus internal for agents) only, 404 when the KB is off.
 - [ ] Tests through the real HTTP path for each route, and a test that no
