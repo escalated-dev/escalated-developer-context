@@ -106,7 +106,8 @@ and the call are equivalent.
 
 - Every route named `escalated.admin.*` that was mounted under
   `{routes.prefix}/admin` (the admin group, plugin admin routes, API-token
-  routes) is mounted under `{embed.prefix}` instead, with
+  routes), and the SDK plugins' admin pages (`{prefix}/admin/plugins/{slug}/…`),
+  are mounted under `{embed.prefix}` instead, with
   `{embed.middleware} + tenancy middleware + [EnsureIsAdmin unless replace_admin_gate] + RequireTwoFactor + EnforceRoutePermissions + ApplyEmbedContext`.
 - **Route names do not change.** The shared frontend builds admin URLs with
   `route('escalated.admin.…')`, so it follows the move. The standalone
@@ -126,7 +127,12 @@ and the call are equivalent.
 - `mode = 'iframe'`: adds `Content-Security-Policy: frame-ancestors 'self' <origins…>`
   (`'self'` only when the list is empty) and removes any `X-Frame-Options`
   header from that response, since `frame-ancestors` is the stricter,
-  allow-listed replacement. It does not touch any other route's headers.
+  allow-listed replacement. It does not touch any other route's headers. The
+  headers are applied once the whole response is built (Laravel: a
+  `RequestHandled` listener), so host middleware that adds `X-Frame-Options`
+  cannot undo them. A CSP the host already sends is kept; `frame-ancestors` is
+  added as a second policy (hosts with their own `frame-ancestors` must list
+  the same origins there, since browsers enforce both).
 - `mode = 'layout'`: no headers are added.
 
 **Shared props** (added to the existing `escalated` shared prop; the keys are
@@ -215,7 +221,9 @@ Filtering, server-side, so a host sidebar never shows a link that would 403 or 4
    everything is sorted by `position`.
 
 Laravel exposes the same list as `Escalated::adminNavigation(?Authenticatable $user = null, ?Request $request = null): array`
-for server-rendered layouts (host type B).
+for server-rendered layouts (host type B). The helper works whether or not
+embedding is on (URLs follow wherever the admin routes are); only the shared
+prop is tied to the switch.
 
 ### Frontend: extending the existing `layout` option
 
@@ -367,7 +375,10 @@ Tests (TDD; through the real router/HTTP stack)
 
 - [ ] **Default unchanged:** with no embed config, `/{prefix}/admin/...` serves
       the admin with today's middleware; no `embed`/`navigation` props; no CSP
-      or frame header changes; the route list for `escalated.admin.*` is identical.
+      or frame header changes; the route table is identical. Laravel does this
+      by committing a snapshot of every `escalated.*` route (name, URI, methods,
+      middleware) taken before the change and comparing against it
+      (`tests/Fixtures/embed/default-routes.json`); ports should do the same.
 - [ ] Embedded routes answer under the host prefix with the host middleware
       (e.g. a host-only middleware that sets a header or aborts runs); old URLs 404.
 - [ ] Admin gate still refuses a non-admin when `replace_admin_gate` is off;
