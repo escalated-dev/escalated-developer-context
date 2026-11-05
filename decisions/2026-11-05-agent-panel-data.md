@@ -89,8 +89,10 @@ is_unread =
      or T.last_customer_activity_at > R.last_read_at)
 ```
 
-A backend computes it in the list query (a left join or correlated subquery),
-not per row.
+A backend computes it in the list query (a left join or correlated subquery)
+or with one batched lookup for the page's tickets, never one query per row.
+Queue counts (`inbox.unread`) need the rule in SQL; escalated-laravel's
+`TicketReads::onlyUnread()` is a portable form (two `EXISTS` subqueries).
 
 **Marking.**
 
@@ -306,7 +308,8 @@ backend lists what it ships in its own docs and CHANGELOG.
 - Two new tables (`ticket_reads`, `customer_presence`) and one new ticket
   column (`last_customer_activity_at`) on every backend that ports unread and
   presence, with migrations for every database the backend supports.
-- Every port computes `is_unread` and presence in the list query; per-row
+- Every port computes `is_unread` and presence in the list query or one
+  batched lookup per page; per-row
   lookups are a defect.
 - The admin live-chat status route becomes an alias; there is exactly one
   stored agent status per agent.
