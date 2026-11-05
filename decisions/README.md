@@ -29,3 +29,4 @@ Each ADR has:
 | 2026-04-26 | [Automation + Macro backend parity (NestJS, Symfony, Phoenix, Go)](2026-04-26-automation-macro-backend-parity.md) | Accepted |
 | 2026-10-29 | [Roles & permissions, SSO and two-factor are per-install switches](2026-10-29-configurable-access-features.md) | Accepted |
 | 2026-11-05 | [Escalated's admin can be embedded in the host's own admin panel (optional)](2026-11-05-embeddable-admin.md) | Accepted |
+| 2026-11-05 | [Agent panel data: unread, customer presence, agent status, notifications, KB search](2026-11-05-agent-panel-data.md) | Accepted |
