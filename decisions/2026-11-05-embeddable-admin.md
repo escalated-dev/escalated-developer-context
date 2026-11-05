@@ -139,6 +139,7 @@ absent while embedding is off, so nothing existing changes):
     "enabled": true,              // true only on embedded admin responses; false on every other page
     "mode": "layout",             // "layout" | "iframe"
     "layout": "Layouts/AdminLayout", // or null
+    "route": "escalated.admin.tickets.index", // current route name (null on non-embedded pages)
     "base_url": "/admin/support", // where the embedded admin lives (absolute path)
     "allowed_origins": []         // iframe mode: the frame_ancestors list; [] in layout mode
   },
@@ -242,10 +243,11 @@ app.use(EscalatedPlugin, {
     renders inside the host's default slot; its height is the existing
     `--esc-shell-height` hook, which the host sets to fit its layout.
 - When the server says the page is embedded (`escalated.embed.enabled`), admin
-  pages are treated as in scope even if `layoutScope` does not list `admin`, and
-  the layout is chosen as: `layouts[embed.layout]` → `layout` → **no host
-  layout** (chrome-free header + content only; this is host type B, where the
-  host chrome is in the root view).
+  pages render chrome-free even if `layoutScope` does not list `admin`, and the
+  layout is chosen as: `layouts[embed.layout]` → `layout` *if `layoutScope`
+  lists `admin`* → **no host layout** (chrome-free title + content only; host
+  type B, where the host chrome is in the root view). A `layout` meant for
+  customer pages is never borrowed for the admin.
 - `escalated.embed.mode === 'iframe'`: chrome-free with no host layout, plus the
   iframe bridge below.
 
@@ -293,9 +295,11 @@ Security rules (all mandatory for ports):
   allow-list **and** `event.source === window.parent` **and** it has
   `source: 'escalated-host'`, `version: 1`. `navigate` URLs must be relative
   paths under `base_url` (no scheme, no `//`).
-- The frontend ships a host-side helper, `connectEscalatedFrame(iframe, { origin, onNavigate, onResize })`,
-  which applies the same checks in the other direction (accepts only messages
-  from `origin` and from that iframe's `contentWindow`).
+- The frontend ships a host-side helper, `connectEscalatedFrame(iframe, { origin, onNavigate, onResize })`
+  from `@escalated-dev/escalated/embed` (no Vue/Inertia dependency), which
+  applies the same checks in the other direction (accepts only messages from
+  `origin` and from that iframe's `contentWindow`) and returns
+  `{ setTheme(mode, tokens?), navigate(url), disconnect() }`.
 - **Cookies:** a frame on another *site* needs the session cookie sent in a
   third-party context: `SameSite=None; Secure` (Laravel:
   `SESSION_SAME_SITE=none`, `SESSION_SECURE_COOKIE=true`), served over HTTPS.
@@ -320,6 +324,9 @@ Security rules (all mandatory for ports):
   prefix is a follow-up ADR if asked for.
 - The README's "Layout Integration" section is corrected: `layout` applies to
   customer pages unless `layoutScope` says otherwise.
+- Pages that built admin URLs from the prefix instead of `route()` must use
+  `escalated.embed.base_url` while embedded (the API tokens screen did; fixed
+  in the shared frontend).
 
 ## Port checklist (each of the 10 other backends)
 
@@ -346,7 +353,8 @@ Routes
 
 Responses / props
 
-- [ ] Embedded responses: `escalated.embed.enabled = true`; root view switch
+- [ ] Embedded responses: `escalated.embed.enabled = true` and `embed.route`
+      = current route name; root view switch
       when `root_view` set; iframe mode adds `frame-ancestors` and strips
       `X-Frame-Options` on those responses only.
 - [ ] `escalated.embed` + `escalated.navigation` shared while embed is on, on
