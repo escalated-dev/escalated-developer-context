@@ -182,7 +182,7 @@ Returned by `GET /tickets/{reference}` and `POST /tickets`. It has every list it
 | `subjects` | `[Subject]` | Only where subjects are supported |
 | `replies` | `[Reply]` | Latest first |
 | `activities` | `[{id, type, description, causer, created_at}]` | The latest 20. `causer` is `{id, name}` or null |
-| `sla` | object | `first_response_due_at`, `first_response_at`, `first_response_breached`, `resolution_due_at`, `resolution_breached` |
+| `sla` | object | `first_response_due_at` (timestamp or null), `first_response_at` (timestamp or null), `first_response_breached` (boolean), `resolution_due_at` (timestamp or null), `resolution_breached` (boolean) |
 | `is_following` | boolean | True when the caller follows the ticket |
 | `followers_count` | integer | |
 | `custom_actions` | array | `{key, label, url, method, ...}`, for the caller |
@@ -215,7 +215,7 @@ Ability `none` means no token. The last column says whether the browser extensio
 | DELETE | `/tickets/{reference}` | admin | | `{message}` | no |
 | GET | `/tickets/{reference}/subjects` | agent | | `{data: [Subject]}` | no |
 | PUT | `/tickets/{reference}/subjects` | agent | `{subjects: [{type, id, role?}]}` | `{data: [Subject]}` | no |
-| POST | `/tickets/{reference}/reply` | agent | `{body, is_internal_note?}` | 201 `{data, message}` | yes |
+| POST | `/tickets/{reference}/reply` | agent | `{body, is_internal_note?}` | 201 `{data: Reply created, message}` | yes |
 | PATCH | `/tickets/{reference}/status` | agent | `{status}` | `{message, status}` | yes |
 | PATCH | `/tickets/{reference}/priority` | agent | `{priority}` | `{message, priority}` | yes |
 | POST | `/tickets/{reference}/assign` | agent | `{agent_id}` | `{message}` | yes |
@@ -245,6 +245,8 @@ No token needed. Rate limited per IP. This is how a client finds the API before 
   "web_url_template": "https://help.example.com/support/agent/tickets/{reference}"
 }
 ```
+
+The `connect_url` and `web_url_template` values are illustrative examples. Real values follow the install's host and web prefix.
 
 - `backend` is one of `laravel`, `rails`, `django`, `adonis`, `symfony`, `wordpress`, `phoenix`, `go`, `dotnet`, `spring`, `nestjs`.
 - `connect_url` is the absolute URL of the connect page. It is `null` when `auth.exchange` is off.
@@ -353,7 +355,7 @@ Answers 201 `{data: Ticket, message: "Ticket created."}`. The ticket starts as `
 
 `body` is required (65535 characters at most). `is_internal_note` is optional and defaults to false. A note is private to staff.
 
-Answers 201:
+Answers 201 with a reduced reply, not the full [Reply](#reply) shape. It has no `is_pinned`, `attachments` or author `email`:
 
 ```json
 {
@@ -372,11 +374,11 @@ The message is `Note added.` for a note.
 
 ### POST /tickets/{reference}/follow
 
-Toggles. Answers `{message, following}` where `following` is the new state.
+Toggles. Answers `{message, following}` where `following` is the new state. The message is `Following ticket.` when the caller now follows, and `Unfollowed ticket.` when they stopped.
 
 ### POST /tickets/{reference}/macro
 
-Takes `{macro_id}`. The macro must be shared or created by the caller, or the answer is 404. Applies the macro's actions in order. Answers `{message: "Macro \"<name>\" applied."}`.
+Takes `{macro_id}`, the macro `id` as returned by `GET /macros`, as an integer. The macro must be shared or created by the caller, or the answer is 404. Applies the macro's actions in order. Answers `{message: "Macro \"<name>\" applied."}`.
 
 ### POST /tickets/{reference}/actions/{action}
 
@@ -384,7 +386,7 @@ Triggers a custom action by key. `payload` is an optional object. An unknown or 
 
 ### POST /tickets/{reference}/tags
 
-`tag_ids` is required. It replaces the full tag set: tags not in the list are removed. Answers `{message: "Tags updated."}`.
+`tag_ids` is required: an array of integer tag ids. Each must exist. A backend casts them to integers. It replaces the full tag set: tags not in the list are removed. Answers `{message: "Tags updated."}`.
 
 ### GET /macros
 

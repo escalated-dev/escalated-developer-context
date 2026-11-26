@@ -1,0 +1,1248 @@
+openapi: 3.1.0
+info:
+  title: Escalated staff API
+  version: '1.0'
+  summary: The REST API every Escalated backend serves to staff clients.
+  description: |
+    Contract v1. The prose source is `staff-api-v1.md` beside this file. If the two disagree,
+    fix both in the same change. A backend that disagrees with them is wrong.
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: '{base}'
+    variables:
+      base:
+        default: https://helpdesk.example.com/support/api/v1
+        description: The install's API prefix. WordPress uses `/wp-json/escalated/v1`. Find it with `GET /meta`.
+security:
+  - bearerAuth: []
+tags:
+  - { name: Discovery, description: Find the API before sign-in. }
+  - { name: Auth, description: 'Token exchange, revoke and validate.' }
+  - { name: Dashboard, description: Agent dashboard. }
+  - { name: Tickets, description: 'Ticket list, detail and actions.' }
+  - { name: Lookups, description: Reference data for forms and pickers. }
+  - { name: Reports, description: Admin reports. }
+
+paths:
+  /meta:
+    get:
+      tags: [Discovery]
+      operationId: getMeta
+      summary: Discover the API
+      description: No token needed. Rate limited per IP. `backend_version` is present only with a valid token.
+      security: []
+      responses:
+        '200':
+          description: API metadata
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Meta' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/exchange:
+    post:
+      tags: [Auth]
+      operationId: exchangeAuthCode
+      summary: Exchange a connect code for a token
+      description: No token. Rate limited to 10 per minute per IP.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExchangeRequest' }
+      responses:
+        '200':
+          description: Token minted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExchangeResponse' }
+        '400':
+          description: Invalid or expired code. The same message covers every failure cause.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/revoke:
+    post:
+      tags: [Auth]
+      operationId: revokeToken
+      summary: Revoke the calling token
+      description: Any valid token, whatever its abilities.
+      responses:
+        '204': { description: 'Token revoked. No body.' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/validate:
+    post:
+      tags: [Auth]
+      operationId: validateToken
+      summary: Describe the caller
+      responses:
+        '200':
+          description: The caller
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthValidateResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /dashboard:
+    get:
+      tags: [Dashboard]
+      operationId: getDashboard
+      summary: Dashboard summary
+      responses:
+        '200':
+          description: Dashboard
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Dashboard' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /tickets:
+    get:
+      tags: [Tickets]
+      operationId: listTickets
+      summary: List tickets
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/TicketStatus' } }
+        - { name: priority, in: query, schema: { $ref: '#/components/schemas/TicketPriority' } }
+        - { name: ticket_type, in: query, schema: { $ref: '#/components/schemas/TicketType' } }
+        - { name: assigned_to, in: query, description: Assignee id., schema: { $ref: '#/components/schemas/Id' } }
+        - { name: unassigned, in: query, description: '`1` for tickets with no assignee.', schema: { type: string, enum: ['1'] } }
+        - { name: department_id, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - { name: account_type, in: query, description: Send together with `account_id`., schema: { type: string } }
+        - { name: account_id, in: query, description: Send together with `account_type`., schema: { type: string } }
+        - { name: search, in: query, description: 'Matches subject, reference, description, and the requester name and email.', schema: { type: string } }
+        - { name: sla_breached, in: query, description: '`1` for tickets with a breached SLA.', schema: { type: string, enum: ['1'] } }
+        - name: tag_ids[]
+          in: query
+          description: Tag ids.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items: { type: integer }
+        - { name: following, in: query, description: '`1` for tickets the caller follows. `0` is the same as omitting it.', schema: { type: string, enum: ['0', '1'] } }
+        - name: updated_since
+          in: query
+          description: Tickets with `updated_at >= updated_since`. A malformed value is a 422.
+          schema: { type: string, format: date-time }
+        - name: sort_by
+          in: query
+          description: Anything else falls back to `created_at`.
+          schema:
+            type: string
+            default: created_at
+            enum: [created_at, updated_at, status, priority, subject, reference, assigned_to, department_id, resolved_at, closed_at]
+        - { name: sort_dir, in: query, schema: { type: string, default: desc, enum: [asc, desc] } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: per_page, in: query, description: Above 100 is a 422., schema: { type: integer, minimum: 1, maximum: 100, default: 15 } }
+      responses:
+        '200':
+          description: A page of tickets
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/TicketListItem' }
+                  meta: { $ref: '#/components/schemas/PaginationMeta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    post:
+      tags: [Tickets]
+      operationId: createTicket
+      summary: Create a ticket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTicketRequest' }
+      responses:
+        '201':
+          description: Ticket created. The ticket has no `replies` or `activities`.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, message]
+                properties:
+                  data: { $ref: '#/components/schemas/Ticket' }
+                  message: { type: string, examples: ['Ticket created.'] }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /tickets/{reference}:
+    parameters:
+      - { $ref: '#/components/parameters/Reference' }
+    get:
+      tags: [Tickets]
+      operationId: getTicket
+      summary: Show a ticket
+      responses:
+        '200':
+          description: The ticket
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/Ticket' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    delete:
+      tags: [Tickets]
+      operationId: deleteTicket
+      summary: Delete a ticket
+      description: Needs the `admin` ability.
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /tickets/{reference}/subjects:
+    parameters:
+      - { $ref: '#/components/parameters/Reference' }
+    get:
+      tags: [Tickets]
+      operationId: listTicketSubjects
+      summary: List a ticket's subjects
+      responses:
+        '200': { $ref: '#/components/responses/SubjectList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    put:
+      tags: [Tickets]
+      operationId: replaceTicketSubjects
+      summary: Replace a ticket's subjects
+      description: Replaces the full set. The `subjects` key must be present and can be an empty list. Where subjects are not supported the answer is 404.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subjects]
+              properties:
+                subjects:
+                  type: array
+                  items:
+                    type: object
+                    required: [type, id]
+                    properties:
+                      type: { type: string }
+                      id: { $ref: '#/components/schemas/Id' }
+                      role: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/SubjectList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /tickets/{reference}/reply:
+    parameters:
+      - { $ref: '#/components/parameters/Reference' }
+    post:
+      tags: [Tickets]
+      operationId: replyToTicket
+      summary: Reply to a ticket or add an internal note
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: { type: string, maxLength: 65535 }
+                is_internal_note: { type: boolean, default: false }
+      responses:
+        '201':
+          description: Reply or note created. The message is `Reply sent.` or `Note added.`.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, message]
+                properties:
+                  data: { $ref: '#/components/schemas/ReplyCreated' }
+                  message: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /tickets/{reference}/status:
+    parameters:
+      - { $ref: '#/components/parameters/Reference' }
+    patch:
+      tags: [Tickets]
+      operationId: updateTicketStatus
+      summary: Change a ticket's status
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: '#/components/schemas/TicketStatus' }
+      responses:
+        '200':
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message, status]
+                properties:
+                  message: { type: string, examples: ['Status updated.'] }
+                  status: { $ref: '#/components/schemas/TicketStatus' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /tickets/{reference}/priority:
+    parameters:
+      - { $ref: '#/components/parameters/Reference' }
+    patch:
+      tags: [Tickets]
+      operationId: updateTicketPriority
+      summary: Change a ticket's priority
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [priority]
+              properties:
+                priority: { $ref: '#/components/schemas/TicketPriority' }
+      responses:
+        '200':
+          description: Priority updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message, priority]
+                properties:
+                  message: { type: string, examples: ['Priority updated.'] }
+                  priority: { $ref: '#/components/schemas/TicketPriority' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /tickets/{reference}/assign:
+    parameters:
+      - { $ref: '#/components/parameters/Reference' }
+    post:
+      tags: [Tickets]
+      operationId: assignTicket
+      summary: Assign a ticket to an agent
+      description: An unknown agent is a 422.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_id]
+              properties:
+                agent_id: { $ref: '#/components/schemas/Id' }
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /tickets/{reference}/follow:
+    parameters:
+      - { $ref: '#/components/parameters/Reference' }
+    post:
+      tags: [Tickets]
+      operationId: toggleTicketFollow
+      summary: Toggle following a ticket
+      description: The message is `Following ticket.` or `Unfollowed ticket.`. `following` is the new state.
+      responses:
+        '200':
+          description: New follow state
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message, following]
+                properties:
+                  message: { type: string }
+                  following: { type: boolean }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /tickets/{reference}/macro:
+    parameters:
+      - { $ref: '#/components/parameters/Reference' }
+    post:
+      tags: [Tickets]
+      operationId: applyMacro
+      summary: Apply a macro to a ticket
+      description: The macro must be shared or created by the caller, or the answer is 404.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [macro_id]
+              properties:
+                macro_id:
+                  type: integer
+                  description: The macro `id` as returned by `GET /macros`.
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /tickets/{reference}/actions/{action}:
+    parameters:
+      - { $ref: '#/components/parameters/Reference' }
+      - { name: action, in: path, required: true, description: Custom action key., schema: { type: string } }
+    post:
+      tags: [Tickets]
+      operationId: runTicketAction
+      summary: Trigger a custom action
+      description: An unknown or hidden action is 404. A disabled action is 403.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                payload: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: Action triggered
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message, action]
+                properties:
+                  message: { type: string }
+                  action: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /tickets/{reference}/tags:
+    parameters:
+      - { $ref: '#/components/parameters/Reference' }
+    post:
+      tags: [Tickets]
+      operationId: setTicketTags
+      summary: Replace a ticket's tags
+      description: Replaces the full tag set. Tags not in the list are removed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tag_ids]
+              properties:
+                tag_ids:
+                  type: array
+                  description: Integer ids of existing tags.
+                  items: { type: integer }
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /agents:
+    get:
+      tags: [Lookups]
+      operationId: listAgents
+      summary: List agents
+      responses:
+        '200':
+          description: Agents
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Agent' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /departments:
+    get:
+      tags: [Lookups]
+      operationId: listDepartments
+      summary: List departments
+      responses:
+        '200':
+          description: Departments
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Department' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /tags:
+    get:
+      tags: [Lookups]
+      operationId: listTags
+      summary: List tags
+      responses:
+        '200':
+          description: Tags
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Tag' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /canned-responses:
+    get:
+      tags: [Lookups]
+      operationId: listCannedResponses
+      summary: List canned responses
+      responses:
+        '200':
+          description: Canned responses
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/CannedResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /macros:
+    get:
+      tags: [Lookups]
+      operationId: listMacros
+      summary: List macros
+      description: Only shared macros and the caller's own, sorted by `order`.
+      responses:
+        '200':
+          description: Macros
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Macro' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /realtime/config:
+    get:
+      tags: [Lookups]
+      operationId: getRealtimeConfig
+      summary: Realtime broadcast config
+      description: The body is `null` when the install does not broadcast over Reverb or Pusher.
+      responses:
+        '200':
+          description: Config object, or null
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/RealtimeConfig'
+                  - type: 'null'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /reports/summary:
+    get:
+      tags: [Reports]
+      operationId: getReportSummary
+      summary: Report summary
+      description: Needs the `admin` ability.
+      parameters:
+        - { name: period, in: query, description: Days., schema: { type: integer, minimum: 1, default: 30 } }
+      responses:
+        '200':
+          description: Summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReportSummary' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /reports/export/{type}:
+    get:
+      tags: [Reports]
+      operationId: exportReport
+      summary: Export a report
+      description: Needs the `admin` ability. Any other type is 404.
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [tickets, agent_performance, sla_compliance, csat, resolution_times, first_response_times]
+        - { name: format, in: query, schema: { type: string, default: json, enum: [json, csv] } }
+        - { name: period, in: query, description: Days., schema: { type: integer, minimum: 1, default: 30 } }
+      responses:
+        '200':
+          description: The report
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [report_type, generated_at, filters, record_count, data]
+                properties:
+                  report_type: { type: string }
+                  generated_at: { $ref: '#/components/schemas/Timestamp' }
+                  filters: { type: object, additionalProperties: true }
+                  record_count: { type: integer }
+                  data: { type: array, items: { type: object, additionalProperties: true } }
+            text/csv:
+              schema: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Opaque token. Abilities are `agent`, `admin` or `*`.
+
+  parameters:
+    Reference:
+      name: reference
+      in: path
+      required: true
+      description: Ticket reference, for example `ESC-00042`. Never the numeric id.
+      schema: { type: string }
+
+  headers:
+    RetryAfter:
+      description: Seconds until the limit resets.
+      schema: { type: integer }
+
+  responses:
+    Message:
+      description: Done
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [message]
+            properties:
+              message: { type: string }
+    SubjectList:
+      description: Subjects
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [data]
+            properties:
+              data:
+                type: array
+                items: { $ref: '#/components/schemas/Subject' }
+    Unauthorized:
+      description: Missing, unknown or expired token. Match on the status, not the message.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Token or user lacks permission, or a policy refused the action.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Unknown ticket, action, report type or route. Also every route when the API is off.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ValidationFailed:
+      description: Validation failed.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ValidationError' }
+    RateLimited:
+      description: Rate limited.
+      headers:
+        Retry-After: { $ref: '#/components/headers/RetryAfter' }
+        X-RateLimit-Limit: { schema: { type: integer } }
+        X-RateLimit-Remaining: { schema: { type: integer } }
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [message]
+            properties:
+              message: { type: string, examples: ['Too many requests.'] }
+              retry_after: { type: integer }
+
+  schemas:
+    Id:
+      description: Opaque id. Host apps use integers or strings.
+      type: [integer, string]
+    Timestamp:
+      description: ISO 8601 in UTC. Both `Z` and `+00:00` suffixes occur.
+      type: string
+      format: date-time
+    NullableTimestamp:
+      description: ISO 8601 in UTC, or null.
+      type: [string, 'null']
+      format: date-time
+    TicketStatus:
+      type: string
+      enum: [open, in_progress, waiting_on_customer, waiting_on_agent, escalated, resolved, closed, reopened, live]
+    TicketPriority:
+      type: string
+      enum: [low, medium, high, urgent, critical]
+    TicketType:
+      type: string
+      enum: [question, problem, incident, task]
+
+    Meta:
+      type: object
+      required: [api_version, backend, features, connect_url, web_url_template]
+      properties:
+        api_version: { type: string, examples: ['1.0'] }
+        backend:
+          type: string
+          enum: [laravel, rails, django, adonis, symfony, wordpress, phoenix, go, dotnet, spring, nestjs]
+        backend_version:
+          type: string
+          description: Only with a valid token.
+          examples: ['1.9.21']
+        features:
+          type: array
+          items:
+            type: string
+            description: 'Known values: tickets.create, tickets.macro, tickets.updated_since, tickets.last_customer_reply_at, canned_responses, macros, auth.exchange, auth.revoke, realtime.'
+        connect_url:
+          type: [string, 'null']
+          description: Absolute URL of the connect page. Null when `auth.exchange` is off. The example value is illustrative.
+          examples: ['https://help.example.com/support/agent/connect-extension']
+        web_url_template:
+          type: string
+          description: Absolute agent ticket URL with `{reference}` where the reference goes. The example value is illustrative.
+          examples: ['https://help.example.com/support/agent/tickets/{reference}']
+
+    PaginationMeta:
+      type: object
+      required: [current_page, last_page, per_page, total]
+      properties:
+        current_page: { type: integer }
+        last_page: { type: integer }
+        per_page: { type: integer }
+        total: { type: integer }
+
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+
+    ValidationError:
+      type: object
+      required: [message, errors]
+      properties:
+        message: { type: string }
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+
+    AccountRef:
+      type: object
+      required: [type, id]
+      properties:
+        type: { type: string }
+        id: { type: string }
+
+    NamedRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        name: { type: string }
+
+    TicketListItem:
+      type: object
+      required: [id, reference, ticket_type, subject, status, status_label, priority, priority_label, requester, assignee, department, sla_breached, last_reply_at, last_customer_reply_at, created_at, updated_at]
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        reference: { type: string }
+        ticket_type: { type: string }
+        account:
+          description: Present only when accounts are enabled.
+          oneOf:
+            - $ref: '#/components/schemas/AccountRef'
+            - type: 'null'
+        subject: { type: string }
+        status: { $ref: '#/components/schemas/TicketStatus' }
+        status_label: { type: string }
+        priority: { $ref: '#/components/schemas/TicketPriority' }
+        priority_label: { type: string }
+        requester:
+          type: object
+          required: [name, email]
+          properties:
+            name: { type: [string, 'null'] }
+            email: { type: [string, 'null'] }
+        assignee:
+          oneOf:
+            - $ref: '#/components/schemas/NamedRef'
+            - type: 'null'
+        department:
+          oneOf:
+            - $ref: '#/components/schemas/NamedRef'
+            - type: 'null'
+        sla_breached: { type: boolean }
+        last_reply_at:
+          description: Last reply of any kind.
+          $ref: '#/components/schemas/NullableTimestamp'
+        last_customer_reply_at:
+          description: Last public activity from the customer side.
+          $ref: '#/components/schemas/NullableTimestamp'
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
+
+    Ticket:
+      type: object
+      description: Full ticket. `POST /tickets` omits `replies` and `activities`.
+      required: [id, reference, ticket_type, subject, description, status, status_label, priority, priority_label, channel, metadata, external_reference, requester, assignee, department, tags, sla, is_following, followers_count, custom_actions, resolved_at, closed_at, last_reply_at, last_customer_reply_at, created_at, updated_at]
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        reference: { type: string }
+        ticket_type: { type: string }
+        account:
+          oneOf:
+            - $ref: '#/components/schemas/AccountRef'
+            - type: 'null'
+        subject: { type: string }
+        description: { type: string }
+        status: { $ref: '#/components/schemas/TicketStatus' }
+        status_label: { type: string }
+        priority: { $ref: '#/components/schemas/TicketPriority' }
+        priority_label: { type: string }
+        channel: { type: string }
+        metadata: { type: [object, 'null'], additionalProperties: true }
+        external_reference: { type: [string, 'null'] }
+        requester:
+          type: object
+          required: [kind, id, name, email]
+          properties:
+            kind: { type: string, enum: [user, contact, guest] }
+            id:
+              oneOf:
+                - $ref: '#/components/schemas/Id'
+                - type: 'null'
+            name: { type: [string, 'null'] }
+            email: { type: [string, 'null'] }
+        assignee:
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [id, name, email]
+              properties:
+                id: { $ref: '#/components/schemas/Id' }
+                name: { type: string }
+                email: { type: [string, 'null'] }
+        department:
+          oneOf:
+            - $ref: '#/components/schemas/NamedRef'
+            - type: 'null'
+        tags:
+          type: array
+          items: { $ref: '#/components/schemas/Tag' }
+        subjects:
+          description: Only where subjects are supported.
+          type: array
+          items: { $ref: '#/components/schemas/Subject' }
+        replies:
+          description: Latest first. Absent on `POST /tickets`.
+          type: array
+          items: { $ref: '#/components/schemas/Reply' }
+        activities:
+          description: The latest 20. Absent on `POST /tickets`.
+          type: array
+          items:
+            type: object
+            required: [id, type, description, causer, created_at]
+            properties:
+              id: { $ref: '#/components/schemas/Id' }
+              type: { type: string }
+              description: { type: [string, 'null'] }
+              causer:
+                oneOf:
+                  - $ref: '#/components/schemas/NamedRef'
+                  - type: 'null'
+              created_at: { $ref: '#/components/schemas/Timestamp' }
+        sla:
+          type: object
+          required: [first_response_due_at, first_response_at, first_response_breached, resolution_due_at, resolution_breached]
+          properties:
+            first_response_due_at: { $ref: '#/components/schemas/NullableTimestamp' }
+            first_response_at: { $ref: '#/components/schemas/NullableTimestamp' }
+            first_response_breached: { type: boolean }
+            resolution_due_at: { $ref: '#/components/schemas/NullableTimestamp' }
+            resolution_breached: { type: boolean }
+        is_following: { type: boolean }
+        followers_count: { type: integer }
+        custom_actions:
+          type: array
+          items:
+            type: object
+            required: [key, label]
+            properties:
+              key: { type: string }
+              label: { type: string }
+              url: { type: [string, 'null'] }
+              method: { type: string }
+            additionalProperties: true
+        resolved_at: { $ref: '#/components/schemas/NullableTimestamp' }
+        closed_at: { $ref: '#/components/schemas/NullableTimestamp' }
+        last_reply_at: { $ref: '#/components/schemas/NullableTimestamp' }
+        last_customer_reply_at: { $ref: '#/components/schemas/NullableTimestamp' }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+        updated_at: { $ref: '#/components/schemas/Timestamp' }
+
+    CreateTicketRequest:
+      type: object
+      required: [subject, description]
+      properties:
+        subject: { type: string, maxLength: 255 }
+        description: { type: string, maxLength: 65535 }
+        priority: { $ref: '#/components/schemas/TicketPriority' }
+        ticket_type: { $ref: '#/components/schemas/TicketType' }
+        department_id:
+          oneOf:
+            - $ref: '#/components/schemas/Id'
+            - type: 'null'
+        tags:
+          type: array
+          description: Ids of existing tags.
+          items: { type: integer }
+        external_reference: { type: [string, 'null'], maxLength: 255 }
+        metadata: { type: [object, 'null'], additionalProperties: true }
+        requester:
+          description: Either `{id}` for an existing user, or `{name, email}`. Default is the caller.
+          type: object
+          properties:
+            id: { $ref: '#/components/schemas/Id' }
+            name: { type: string }
+            email: { type: string }
+        subjects:
+          type: array
+          items:
+            type: object
+            required: [type, id]
+            properties:
+              type: { type: string }
+              id: { $ref: '#/components/schemas/Id' }
+              role: { type: string }
+
+    Reply:
+      type: object
+      required: [id, body, is_internal_note, is_pinned, author, created_at]
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        body: { type: string }
+        is_internal_note: { type: boolean }
+        is_pinned: { type: boolean }
+        author:
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [id, name]
+              properties:
+                id: { $ref: '#/components/schemas/Id' }
+                name: { type: string }
+                email: { type: [string, 'null'] }
+        attachments:
+          type: array
+          items:
+            type: object
+            required: [id, filename, mime_type, size, url]
+            properties:
+              id: { $ref: '#/components/schemas/Id' }
+              filename: { type: string }
+              mime_type: { type: [string, 'null'] }
+              size: { type: [integer, 'null'] }
+              url: { type: [string, 'null'] }
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+
+    ReplyCreated:
+      description: The reduced reply returned by `POST /tickets/{reference}/reply`.
+      type: object
+      required: [id, body, is_internal_note, author, created_at]
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        body: { type: string }
+        is_internal_note: { type: boolean }
+        author:
+          oneOf:
+            - $ref: '#/components/schemas/NamedRef'
+            - type: 'null'
+        created_at: { $ref: '#/components/schemas/Timestamp' }
+
+    Subject:
+      type: object
+      required: [link_id, type, id, role, title, missing]
+      properties:
+        link_id: { $ref: '#/components/schemas/Id' }
+        type: { type: string }
+        id: { $ref: '#/components/schemas/Id' }
+        role: { type: [string, 'null'] }
+        position: { type: [integer, 'null'] }
+        title: { type: [string, 'null'] }
+        subtitle: { type: [string, 'null'] }
+        url: { type: [string, 'null'] }
+        color: { type: [string, 'null'] }
+        icon: { type: [string, 'null'] }
+        missing:
+          type: boolean
+          description: True when the linked record is gone or the caller may not see it.
+
+    Tag:
+      type: object
+      required: [id, name, color]
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        name: { type: string }
+        color: { type: [string, 'null'] }
+
+    Agent:
+      type: object
+      required: [id, name, email]
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        name: { type: string }
+        email: { type: [string, 'null'] }
+
+    Department:
+      type: object
+      required: [id, name, description, is_active]
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        is_active: { type: boolean }
+
+    CannedResponse:
+      type: object
+      required: [id, title, body]
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        title: { type: string }
+        body: { type: string }
+
+    Macro:
+      type: object
+      required: [id, name, actions, order]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        actions:
+          type: array
+          description: Ordered list applied in sequence.
+          items:
+            type: object
+            required: [type, value]
+            properties:
+              type: { type: string, enum: [status, priority, assign, tags, department, reply, note] }
+              value: {}
+        order: { type: integer }
+
+    Dashboard:
+      type: object
+      required: [stats, recent_tickets, needs_attention, my_performance]
+      properties:
+        stats:
+          type: object
+          required: [open, my_assigned, unassigned, sla_breached, resolved_today]
+          properties:
+            open: { type: integer }
+            my_assigned: { type: integer }
+            unassigned: { type: integer }
+            sla_breached: { type: integer }
+            resolved_today: { type: integer }
+        recent_tickets:
+          description: The 10 newest tickets.
+          type: array
+          items:
+            type: object
+            required: [id, reference, subject, status, priority, requester_name, assignee_name, created_at]
+            properties:
+              id: { $ref: '#/components/schemas/Id' }
+              reference: { type: string }
+              subject: { type: string }
+              status: { $ref: '#/components/schemas/TicketStatus' }
+              priority: { $ref: '#/components/schemas/TicketPriority' }
+              requester_name: { type: [string, 'null'] }
+              assignee_name: { type: [string, 'null'] }
+              created_at: { $ref: '#/components/schemas/Timestamp' }
+        needs_attention:
+          type: object
+          required: [sla_breaching, unassigned_urgent]
+          properties:
+            sla_breaching: { $ref: '#/components/schemas/AttentionList' }
+            unassigned_urgent: { $ref: '#/components/schemas/AttentionList' }
+        my_performance:
+          type: object
+          required: [resolved_this_week]
+          properties:
+            resolved_this_week: { type: integer }
+
+    AttentionList:
+      description: At most 5 items.
+      type: array
+      items:
+        type: object
+        required: [reference, subject, priority, requester_name]
+        properties:
+          reference: { type: string }
+          subject: { type: string }
+          priority: { type: string }
+          requester_name: { type: [string, 'null'] }
+
+    ExchangeRequest:
+      type: object
+      required: [code, code_verifier, redirect_uri]
+      properties:
+        code: { type: string }
+        code_verifier: { type: string }
+        redirect_uri: { type: string }
+
+    ExchangeResponse:
+      type: object
+      required: [token, token_type, expires_at, user]
+      properties:
+        token: { type: string }
+        token_type: { type: string, enum: [Bearer] }
+        expires_at: { $ref: '#/components/schemas/NullableTimestamp' }
+        user: { $ref: '#/components/schemas/Agent' }
+
+    AuthValidateResponse:
+      type: object
+      required: [user, abilities, is_agent, is_admin, token_name, expires_at]
+      properties:
+        user: { $ref: '#/components/schemas/Agent' }
+        abilities:
+          type: array
+          items: { type: string }
+        is_agent: { type: boolean }
+        is_admin: { type: boolean }
+        token_name: { type: [string, 'null'] }
+        expires_at: { $ref: '#/components/schemas/NullableTimestamp' }
+
+    RealtimeConfig:
+      type: object
+      required: [driver, key]
+      properties:
+        driver: { type: string, examples: [reverb] }
+        channel_prefix: { type: string }
+        key: { type: string }
+        host: { type: [string, 'null'] }
+        port: { type: [integer, 'null'] }
+        scheme: { type: [string, 'null'] }
+        cluster: { type: [string, 'null'] }
+
+    ReportSummary:
+      type: object
+      required: [period_days, avg_first_response_hours, avg_resolution_hours, sla_compliance_rate, csat_average, volume, by_status, by_priority, comparison]
+      properties:
+        period_days: { type: integer }
+        avg_first_response_hours: { type: [number, 'null'] }
+        avg_resolution_hours: { type: [number, 'null'] }
+        sla_compliance_rate: { type: [number, 'null'] }
+        csat_average: { type: [number, 'null'] }
+        volume: {}
+        by_status: { type: object, additionalProperties: true }
+        by_priority: { type: object, additionalProperties: true }
+        comparison: {}
