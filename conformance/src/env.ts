@@ -25,3 +25,28 @@ export function env(): ConformanceEnv {
   }
   return { baseUrl: base, agentToken, adminToken: adminToken || undefined };
 }
+
+export interface ConnectFixture {
+  /** A fresh code from the connect page, issued for `verifier` and `redirectUri`. */
+  code: string;
+  /** A second fresh code for the same verifier and redirect_uri, spent by the failure cases. */
+  code2: string;
+  verifier: string;
+  redirectUri: string;
+}
+
+const CONNECT_VARS = [
+  'ESCALATED_CONFORMANCE_CONNECT_CODE',
+  'ESCALATED_CONFORMANCE_CONNECT_CODE_2',
+  'ESCALATED_CONFORMANCE_CONNECT_VERIFIER',
+  'ESCALATED_CONFORMANCE_CONNECT_REDIRECT_URI',
+] as const;
+
+/** The optional connect fixture, or the names of the variables that are not set. */
+export function connectFixture(): { fixture: ConnectFixture } | { missing: string[] } {
+  const values = CONNECT_VARS.map((name) => process.env[name]?.trim() ?? '');
+  const missing = CONNECT_VARS.filter((_, i) => !values[i]);
+  if (missing.length) return { missing };
+  const [code, code2, verifier, redirectUri] = values;
+  return { fixture: { code, code2, verifier, redirectUri } };
+}

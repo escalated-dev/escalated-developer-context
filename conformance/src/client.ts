@@ -5,6 +5,8 @@ export interface ApiOptions {
   token?: string | null;
   query?: Record<string, string | number | boolean | undefined>;
   body?: unknown;
+  /** Retry once after `Retry-After` on a 429. Defaults to true. Pass false to see the 429 itself. */
+  retry?: boolean;
 }
 
 export interface ApiResponse {
@@ -12,6 +14,8 @@ export interface ApiResponse {
   headers: Headers;
   /** Parsed JSON body, or null when the body is empty or not JSON. */
   json: any;
+  /** The raw body text. */
+  text: string;
 }
 
 const MAX_RETRY_WAIT_MS = 65_000;
@@ -56,17 +60,17 @@ async function once(method: string, url: string, token: string | null, body: unk
       json = null;
     }
   }
-  return { status: res.status, headers: res.headers, json };
+  return { status: res.status, headers: res.headers, json, text };
 }
 
-/** Call the API under test. Retries once after `Retry-After` on 429. */
+/** Call the API under test. Retries once after `Retry-After` on 429, unless `retry` is false. */
 export async function api(method: string, path: string, opts: ApiOptions = {}): Promise<ApiResponse> {
   // The token is only required when the call actually uses the default one.
   const token = opts.token === undefined ? env().agentToken : opts.token;
   const url = buildUrl(readBaseUrl(), path, opts.query);
   const m = method.toUpperCase();
   const res = await once(m, url, token, opts.body);
-  if (res.status !== 429) return res;
+  if (res.status !== 429 || opts.retry === false) return res;
   const seconds = Number(res.headers.get('retry-after') ?? res.json?.retry_after ?? 1);
   const waitMs = Math.min(Math.max(Number.isFinite(seconds) ? seconds : 1, 0) * 1000, MAX_RETRY_WAIT_MS);
   await new Promise((r) => setTimeout(r, waitMs));
