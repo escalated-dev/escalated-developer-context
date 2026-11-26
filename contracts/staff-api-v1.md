@@ -126,7 +126,8 @@ How the page behaves:
 - A code expires 60 seconds after it is issued.
 - The 200 response MUST carry `Cache-Control: no-store`.
 - When an already used code is presented again, the server SHOULD revoke the token that code issued, since a replay means the code leaked. The server keeps the used code's record, with the id of the token it issued, at least until the code would have expired.
-- Every failure answers 400 with the same message, as described in [POST /auth/exchange](#post-authexchange).
+- A body that is missing `code`, `code_verifier` or `redirect_uri`, or where one of them is not a string, is a 422 validation error. That check runs before any code lookup, so it does not consume a code.
+- Every failure that involves a code (unknown, used, expired, wrong verifier, mismatched `redirect_uri`) answers the single generic 400 described in [POST /auth/exchange](#post-authexchange). The response never says which.
 
 ## Conventions
 
@@ -333,7 +334,7 @@ Success, 200, with `Cache-Control: no-store`:
 
 `expires_at` is a timestamp, or `null` when the token never expires.
 
-Failure, 400 `{ "message": "Invalid or expired code." }`. The same message covers an unknown code, a used code, an expired code, a wrong verifier and a `redirect_uri` that does not match. The response never says which. A missing body field is a 422.
+Failure, 400 `{ "message": "Invalid or expired code." }`. The same message covers an unknown code, a used code, an expired code, a wrong verifier and a `redirect_uri` that does not match. The response never says which. A body with a missing or non-string field is a 422, checked before any code lookup.
 
 ### POST /auth/revoke
 
@@ -437,9 +438,14 @@ The message is `Note added.` for a note.
 
 ### Status transitions
 
-A status change MUST follow the install's transition table. A change the table does not allow is a 422 with `errors.status`, for example `{"message": "Cannot change status from closed to waiting_on_customer.", "errors": {"status": ["Cannot change status from closed to waiting_on_customer."]}}`. Setting the status a ticket already has is a 200 and a no-op.
+A backend MAY restrict which status changes it allows. Backends differ here: some allow any change, some hard-code a table, and Laravel reads its table from install config.
 
-The default table, which an install may change in config:
+- A change the backend refuses MUST be a 422 with `errors.status`, never a 500. For example `{"message": "Cannot change status from closed to waiting_on_customer.", "errors": {"status": ["Cannot change status from closed to waiting_on_customer."]}}`.
+- Setting the status a ticket already has MUST be a 200 and a no-op.
+
+Clients cannot know the table in advance, so they treat a 422 with `errors.status` as "not allowed from here" and show the message.
+
+Recommended default table. This is informative, not normative; it is Laravel's default config:
 
 | From | Allowed to |
 |---|---|
@@ -452,8 +458,6 @@ The default table, which an install may change in config:
 | `closed` | `reopened` |
 | `reopened` | `in_progress`, `waiting_on_customer`, `waiting_on_agent`, `escalated`, `resolved`, `closed` |
 | `live` | `open`, `resolved`, `closed` |
-
-The conformance suite assumes the default table.
 
 ### POST /tickets/{reference}/follow
 
@@ -530,5 +534,5 @@ First version. Taken from `escalated-laravel` 1.9.20 with these changes to Larav
 - `following` returns the tickets the caller follows. Laravel returned the tickets the caller requested.
 - `GET /tickets/{reference}` always returns `is_following` and `followers_count`. Laravel left them out.
 - `GET /tickets/{reference}` returns `sla_breached`, like the list item. Laravel's `TicketResource` leaves it out.
-- A status change the transition table does not allow is a 422 with `errors.status`, and setting the current status is a 200 no-op. Laravel throws `InvalidArgumentException` from `Ticket::transitionTo` (`src/Models/Ticket.php`, line 932), which answers 500. Setting the current status hits the same exception, except for `resolved`, `closed`, `reopened` and `escalated`, which Laravel routes to their own methods without checking the table.
+- A status change the backend refuses is a 422 with `errors.status`, and setting the current status is a 200 no-op. Laravel throws `InvalidArgumentException` from `Ticket::transitionTo` (`src/Models/Ticket.php`, line 932), which answers 500. Setting the current status hits the same exception, except for `resolved`, `closed`, `reopened` and `escalated`, which Laravel routes to their own methods without checking the table.
 - `GET /tickets` breaks ties in the sort column by `id`. Laravel orders by the sort column alone (`src/Drivers/LocalDriver.php`, line 139), so tickets created in the same second can repeat or go missing across pages.

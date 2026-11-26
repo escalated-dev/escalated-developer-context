@@ -2,18 +2,21 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 import {
   api,
   describeContract,
-  disallowedTarget,
   expectSchema,
+  forbiddenTransition,
   hasFeature,
-  roundTripTarget,
-  statusChainIsRestorable,
+  isRefusedTransition,
+  ROUND_TRIP_CANDIDATES,
+  STATUSES,
 } from '../src';
 
 /**
  * Mutates one seeded ticket and puts status, priority and assignee back, even
  * when an assertion fails. Replies and notes cannot be deleted through the API,
- * so they stay on the ticket. Status targets come from the default transition
- * table in the contract. About 22 requests per run, at most 29.
+ * so they stay on the ticket. Backends may restrict status changes in different
+ * ways, so status targets are tried in turn and a 422 with errors.status means
+ * "not allowed from here". About 22 requests per run on a backend that allows
+ * the first candidate.
  */
 describeContract('ticket actions', () => {
   let reference: string;
@@ -30,10 +33,25 @@ describeContract('ticket actions', () => {
     return (await api('GET', `/tickets/${reference}`)).json?.data;
   }
 
+  const setStatus = (ref: string, status: string) => api('PATCH', `/tickets/${ref}/status`, { body: { status } });
+
+  /** Puts a ticket's status back to `want`, directly or through one candidate status. True on success. */
+  async function putStatusBack(ref: string, have: string, want: string): Promise<boolean> {
+    if (have === want) return true;
+    if ((await setStatus(ref, want)).status === 200) return true;
+    for (const hop of ROUND_TRIP_CANDIDATES) {
+      if (hop === have || hop === want) continue;
+      if ((await setStatus(ref, hop)).status !== 200) continue;
+      have = hop;
+      if ((await setStatus(ref, want)).status === 200) return true;
+    }
+    return false;
+  }
+
   async function restore(): Promise<void> {
     const now = await current();
     if (!now) return;
-    if (now.status !== snap.status) await api('PATCH', `/tickets/${reference}/status`, { body: { status: snap.status } });
+    if (now.status !== snap.status) await putStatusBack(reference, now.status, snap.status);
     if (now.priority !== snap.priority) await api('PATCH', `/tickets/${reference}/priority`, { body: { priority: snap.priority } });
     if (originalAssignee() !== null && String(now.assignee?.id) !== String(originalAssignee())) {
       await api('POST', `/tickets/${reference}/assign`, { body: { agent_id: originalAssignee() } });
@@ -88,37 +106,51 @@ describeContract('ticket actions', () => {
     expect(note.is_internal_note).toBe(true);
   });
 
-  it('status changes to an allowed target, then back', async (ctx) => {
-    const from: string = (await current())?.status;
-    const target = from ? roundTripTarget(from) : undefined;
-    if (!target) ctx.skip(`no status the default table allows to and back from "${from}"`);
-    try {
-      const res = await api('PATCH', `/tickets/${reference}/status`, { body: { status: target } });
-      expect(res.status).toBe(200);
-      expect(res.json).toMatchObject({ message: 'Status updated.', status: target });
-    } finally {
-      const back = await api('PATCH', `/tickets/${reference}/status`, { body: { status: from } });
-      expect.soft(back.status, 'putting the status back').toBe(200);
-      expect.soft(back.json?.status, 'putting the status back').toBe(from);
+  it('status changes, then back', async (ctx) => {
+    const from: string = (await current())?.status ?? snap.status;
+    const refused: string[] = [];
+    for (const target of ROUND_TRIP_CANDIDATES) {
+      if (target === from) continue;
+      const res = await setStatus(reference, target);
+      if (isRefusedTransition(res)) {
+        refused.push(target); // not allowed from here; try the next one
+        continue;
+      }
+      try {
+        expect(res.status).toBe(200);
+        expect(res.json).toMatchObject({ message: 'Status updated.', status: target });
+      } finally {
+        if (res.status === 200) {
+          expect.soft(await putStatusBack(reference, target, from), `putting the status back to "${from}"`).toBe(true);
+        }
+      }
+      return;
     }
+    ctx.skip(`the backend refused every candidate status from "${from}" with 422: ${refused.join(', ')}`);
   });
 
   it('setting the current status is 200 and a no-op', async () => {
-    const res = await api('PATCH', `/tickets/${reference}/status`, { body: { status: snap.status } });
+    const res = await setStatus(reference, snap.status);
     expect(res.status).toBe(200);
     expect(res.json).toMatchObject({ message: 'Status updated.', status: snap.status });
   });
 
-  it('a transition the table forbids is 422 with errors.status', async (ctx) => {
-    const target = disallowedTarget(snap.status);
-    if (!target) ctx.skip(`no forbidden status from "${snap.status}" that could be undone`);
-    const res = await api('PATCH', `/tickets/${reference}/status`, { body: { status: target } });
+  it('a transition the backend refuses is 422 with errors.status', async (ctx) => {
+    const forbidden = forbiddenTransition(STATUSES);
+    if (!forbidden) return ctx.skip('ESCALATED_CONFORMANCE_FORBIDDEN_TRANSITION is not set (for example open:live)');
+    let ref = reference;
+    if (snap.status !== forbidden.from) {
+      const t = (await api('GET', '/tickets', { query: { status: forbidden.from, per_page: 1 } })).json?.data?.[0];
+      if (!t) return ctx.skip(`no ticket in status "${forbidden.from}" to try ${forbidden.from} -> ${forbidden.to} on`);
+      ref = t.reference;
+    }
+    const res = await setStatus(ref, forbidden.to);
     try {
-      expect(res.status).toBe(422);
+      expect(res.status, `PATCH status ${forbidden.from} -> ${forbidden.to}`).toBe(422);
       expectSchema('ValidationError', res.json);
       expect(res.json.errors).toHaveProperty('status');
     } finally {
-      if (res.status === 200) await api('PATCH', `/tickets/${reference}/status`, { body: { status: snap.status } });
+      if (res.status === 200) await putStatusBack(ref, forbidden.to, forbidden.from);
     }
   });
 
@@ -157,21 +189,12 @@ describeContract('ticket actions', () => {
 
   it('applies a macro', async (ctx) => {
     if (!hasFeature('tickets.macro')) ctx.skip('backend does not list tickets.macro');
-    const from: string = (await current())?.status ?? snap.status;
-    // Only a macro this suite can undo: status and priority actions it can put back,
-    // or notes, which leave no trace beyond the note.
+    // Only a macro this suite can undo whatever the backend's transition rules:
+    // priority actions it puts back, and notes, which leave no trace beyond the note.
     const safe = macros.find(
-      (m) =>
-        m.actions.length > 0 &&
-        m.actions.every((a: any) => ['status', 'priority', 'note'].includes(a.type)) &&
-        statusChainIsRestorable(
-          from,
-          m.actions.filter((a: any) => a.type === 'status').map((a: any) => String(a.value)),
-        ),
+      (m) => m.actions.length > 0 && m.actions.every((a: any) => ['priority', 'note'].includes(a.type)),
     );
-    if (!safe) {
-      ctx.skip(`no macro in the seed with only status, priority or note actions whose status change can be undone from "${from}"`);
-    }
+    if (!safe) ctx.skip('no macro in the seed with only priority or note actions');
     try {
       const res = await api('POST', `/tickets/${reference}/macro`, { body: { macro_id: safe.id } });
       expect(res.status).toBe(200);

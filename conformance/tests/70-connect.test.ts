@@ -60,14 +60,20 @@ describeContract('connect: POST /auth/exchange', () => {
     // Well formed (43 unreserved characters) but not the verifier the code was issued for.
     const wrong = fixture.verifier.startsWith('A') ? 'B'.repeat(43) : 'A'.repeat(43);
     const bad = await exchange(fixture.code2, wrong, fixture.redirectUri);
-    expect(bad.status).toBe(400);
-    expectSchema('Error', bad.json);
-
     const after = await exchange(fixture.code2, fixture.verifier, fixture.redirectUri);
-    expect(after.status, 'CODE_2 still worked after a failed exchange; any presentation must consume it').toBe(400);
-    if (after.status === 200 && after.json?.token && hasFeature('auth.revoke')) {
-      await api('POST', '/auth/revoke', { token: after.json.token });
+
+    // Revoke anything a broken backend minted before asserting, so no live token is left behind.
+    if (hasFeature('auth.revoke')) {
+      for (const res of [bad, after]) {
+        if (res.status === 200 && typeof res.json?.token === 'string') {
+          await api('POST', '/auth/revoke', { token: res.json.token });
+        }
+      }
     }
+
+    expect.soft(bad.status, 'a wrong verifier must be refused').toBe(400);
+    if (bad.status === 400) expectSchema('Error', bad.json);
+    expect.soft(after.status, 'CODE_2 still worked after a failed exchange; any presentation must consume it').toBe(400);
   });
 
   // Keep this last: it uses up the per-IP exchange limit for the next minute.

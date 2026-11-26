@@ -25,6 +25,7 @@ npm test
 | `ESCALATED_CONFORMANCE_CONNECT_CODE_2` | no | A second fresh code for the same verifier and `redirect_uri`, spent by the failure cases |
 | `ESCALATED_CONFORMANCE_CONNECT_VERIFIER` | no | The `code_verifier` both codes were issued for |
 | `ESCALATED_CONFORMANCE_CONNECT_REDIRECT_URI` | no | The `redirect_uri` both codes were issued for |
+| `ESCALATED_CONFORMANCE_FORBIDDEN_TRANSITION` | no | A status change this backend refuses, as `from:to`, for example `open:live`. The suite checks it answers 422 with `errors.status`. Unset on a backend that allows every change; that test is then skipped |
 
 ## Seed the install must have
 
@@ -33,8 +34,7 @@ Each backend's CI provides this before `npm test`:
 - Two staff users: the token's owner and one other agent.
 - At least three open tickets, at least one unassigned, and at least one open ticket assigned to someone. The action tests change that ticket and put its status, priority and assignee back; the API cannot unassign, so an assigned ticket is needed for the assign test. The replies and notes they add stay on the ticket.
 - At least one department.
-- Canned responses and macros are optional. The macro test runs only when a macro exists whose actions are all `status`, `priority` or `note`, and whose status changes the suite can undo under the default transition table; otherwise it is skipped with the reason.
-- The default status transition table from the contract. The status tests pick their targets from it: a status the ticket can move to and back from, the current status (a no-op), and a status the table forbids.
+- Canned responses and macros are optional. The macro test runs only when a macro exists whose actions are all `priority` or `note`; otherwise it is skipped with the reason. Status actions are left out because the suite cannot know whether the backend lets it put the status back.
 
 Run it against a throwaway seed. The suite sends `DELETE /tickets/{reference}` with an agent token and expects 403; a backend that gets that wrong would delete the ticket.
 
@@ -42,7 +42,7 @@ Request counts per run, measured against a mock that serves every feature:
 
 | Bucket | Requests | Limit |
 |---|---|---|
-| Agent token | 45 (at most about 50 when every restore step fires) | 60 per minute per token |
+| Agent token | 43 to 45 (44 with every fixture set; more only when a restore step has to retry) | 60 per minute per token |
 | Revocable token | 2 | 60 per minute per token |
 | Token minted by the connect test | 2 | 60 per minute per token |
 | `POST /auth/exchange`, per IP | 11 (1 + 4 + 6 until the 429), at most 16 | 10 per minute per IP |
@@ -102,6 +102,6 @@ describeContract('GET /tickets', () => {
 
 Files run one at a time, in name order, because they share one live install. `vitest.config.ts` sets `fileParallelism: false` and an alphabetical sequencer (`src/sequencer.ts`), since Vitest's default sequencer does not promise an order. Name new files `NN-topic.test.ts`.
 
-`expectSchema(name, value)` (from `../src`) validates a value against a component of `contracts/staff-api-v1.openapi.yaml` with Ajv and fails with the full error list. `hasFeature(name)` tells whether `GET /meta` lists a feature, for `it.skipIf(!hasFeature('x'))`; it makes no request. `connectFixture()` returns the connect fixture or the names of the variables that are missing. `roundTripTarget`, `disallowedTarget` and `statusChainIsRestorable` read the default transition table.
+`expectSchema(name, value)` (from `../src`) validates a value against a component of `contracts/staff-api-v1.openapi.yaml` with Ajv and fails with the full error list. `hasFeature(name)` tells whether `GET /meta` lists a feature, for `it.skipIf(!hasFeature('x'))`; it makes no request. `connectFixture()` returns the connect fixture or the names of the variables that are missing. `forbiddenTransition()` reads `ESCALATED_CONFORMANCE_FORBIDDEN_TRANSITION`. The contract lets each backend choose which status changes it allows, so the status round-trip test tries `waiting_on_customer`, `in_progress`, `waiting_on_agent` and `open` in turn, treats a 422 with `errors.status` (`isRefusedTransition`) as "not allowed from here", and skips when every candidate is refused.
 
 Assertions in a `finally` block use `expect.soft`, so a failure in the clean-up does not hide the first failure in the test.

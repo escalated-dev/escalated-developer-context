@@ -73,12 +73,16 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ExchangeResponse' }
         '400':
-          description: Invalid or expired code. The same message covers every failure cause.
+          description: Invalid or expired code. The same message covers every failure that involves a code.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '422':
+          description: A required field is missing or not a string. Checked before any code lookup, so no code is consumed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationError' }
         '429': { $ref: '#/components/responses/RateLimited' }
 
   /auth/revoke:
@@ -322,9 +326,9 @@ paths:
       operationId: updateTicketStatus
       summary: Change a ticket's status
       description: |
-        The change must follow the install's transition table (the default is in `staff-api-v1.md`).
-        A change the table does not allow is a 422 with `errors.status`. Setting the current status
-        is a 200 and a no-op.
+        A backend MAY restrict which changes it allows (a recommended default table is in
+        `staff-api-v1.md`). A refused change MUST be a 422 with `errors.status`, never a 500.
+        Setting the current status MUST be a 200 and a no-op.
       requestBody:
         required: true
         content:

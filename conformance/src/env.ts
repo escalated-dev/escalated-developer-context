@@ -50,3 +50,19 @@ export function connectFixture(): { fixture: ConnectFixture } | { missing: strin
   const [code, code2, verifier, redirectUri] = values;
   return { fixture: { code, code2, verifier, redirectUri } };
 }
+
+/**
+ * The optional forbidden-transition fixture, ESCALATED_CONFORMANCE_FORBIDDEN_TRANSITION=from:to,
+ * naming a status change this backend refuses. Undefined when unset; throws on a malformed value.
+ */
+export function forbiddenTransition(statuses: readonly string[]): { from: string; to: string } | undefined {
+  const raw = process.env.ESCALATED_CONFORMANCE_FORBIDDEN_TRANSITION?.trim();
+  if (!raw) return undefined;
+  const [from, to, ...rest] = raw.split(':').map((p) => p.trim());
+  if (rest.length || !from || !to || from === to || !statuses.includes(from) || !statuses.includes(to)) {
+    throw new Error(
+      `ESCALATED_CONFORMANCE_FORBIDDEN_TRANSITION must be "from:to" with two different statuses from ${statuses.join(', ')}; got "${raw}"`,
+    );
+  }
+  return { from, to };
+}
