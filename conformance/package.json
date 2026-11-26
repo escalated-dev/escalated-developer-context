@@ -12,7 +12,10 @@
   },
   "devDependencies": {
     "@types/node": "^22.20.7",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "typescript": "^7.0.2",
-    "vitest": "^5.1.2"
+    "vitest": "^5.1.2",
+    "yaml": "^2.9.1"
   }
 }

@@ -2,7 +2,7 @@ import type { TestProject } from 'vitest/node';
 import { api } from './client';
 
 export type ContractState =
-  | { kind: 'ok' }
+  | { kind: 'ok'; features: string[] }
   | { kind: 'missing'; message: string }
   | { kind: 'unreachable'; message: string }
   | { kind: 'misconfigured'; message: string };
@@ -24,7 +24,8 @@ async function probe(): Promise<ContractState> {
   try {
     const res = await api('GET', '/meta', { token: null });
     if (res.status === 404) return { kind: 'missing', message: MISSING_MESSAGE };
-    return { kind: 'ok' };
+    const features: unknown = res.json?.features;
+    return { kind: 'ok', features: Array.isArray(features) ? features.filter((f): f is string => typeof f === 'string') : [] };
   } catch (e) {
     return { kind: 'unreachable', message: (e as Error).message };
   }

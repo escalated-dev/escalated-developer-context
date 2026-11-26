@@ -9,3 +9,12 @@ import './global-setup';
 export function describeContract(name: string, fn: () => void): void {
   describe.skipIf(inject('contractState').kind !== 'ok')(name, fn);
 }
+
+/**
+ * True when GET /meta lists the feature. Read at collection time, so it works
+ * in `it.skipIf(!hasFeature('x'))`. No request is made: /meta is fetched once per run.
+ */
+export function hasFeature(name: string): boolean {
+  const state = inject('contractState');
+  return state.kind === 'ok' && state.features.includes(name);
+}
