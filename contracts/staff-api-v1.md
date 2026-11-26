@@ -4,6 +4,8 @@ The REST API that every Escalated backend serves to staff clients, such as the b
 
 Contract version: `1.0`.
 
+The words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are used as in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
+
 A conformance suite runs against a live backend over HTTP. This document is its source, together with the OpenAPI file that sits beside it.
 
 ## Scope
@@ -52,29 +54,79 @@ Tokens come from two places. An admin can create one in the admin UI. A browser 
 
 ### Connecting an extension
 
-The connect flow uses a browser redirect with PKCE (S256). The extension never sees the staff member's password.
+The connect flow uses a browser redirect with PKCE (S256, [RFC 7636](https://www.rfc-editor.org/rfc/rfc7636)). The extension never sees the staff member's password.
 
-1. The extension generates a random `code_verifier` and derives `code_challenge = base64url(sha256(code_verifier))`. It also generates a random `state`.
+1. The extension generates a random `code_verifier`, derives `code_challenge` from it as described in [PKCE encoding](#pkce-encoding), and generates a random `state`.
 2. The extension opens this page in the browser, where the staff member is signed in:
 
    `GET {web_prefix}/agent/connect-extension?redirect_uri=&state=&code_challenge=&code_challenge_method=S256&client_name=`
 
    `{web_prefix}` is the install's web route prefix, `support` by default. The page URL is advertised as `connect_url` in `GET /meta`.
-3. `redirect_uri` must match `^https://[a-p]{32}\.chromiumapp\.org/$` (the Chrome extension redirect). An install may add its own patterns. Any other value is rejected with an error page and no redirect.
-4. The page shows who is asking (`client_name`) and two buttons.
+3. The page checks the parameters as described in [Connect page requirements](#connect-page-requirements). The Chrome extension redirect is `https://<extension id>.chromiumapp.org/`.
+4. The page shows who is asking (the extension ID and `client_name`) and two buttons.
    - Approve creates a one-time code and redirects to `redirect_uri?code=<code>&state=<state>`.
    - Deny redirects to `redirect_uri?error=access_denied&state=<state>`.
-5. The code lives 60 seconds and works once. The server stores a hash of it, with the challenge and the `redirect_uri`.
-6. The extension calls `POST /auth/exchange` with the code, the verifier and the same `redirect_uri`, and gets a token.
+5. The code lives 60 seconds and works once. The server stores a hash of it, with the challenge, the `redirect_uri`, the extension ID and the staff member who approved it.
+6. The extension calls `POST /auth/exchange` with the code, the verifier and the same `redirect_uri`, and gets a token. The server follows the [Exchange rules](#exchange-rules).
 
 The token minted by the exchange has:
 
 - abilities `["agent"]`
-- name `Browser extension (<client_name>)`
+- name `Browser extension (<client_name>)`, using the truncated `client_name`, or `Browser extension` when `client_name` was empty or missing
 - kind `browser_extension`
+- the extension ID from the code
 - no expiry, unless the install sets one
 
-Each staff member sees and revokes their own extension tokens at `{web_prefix}/agent/browser-extensions`. A client can also revoke its own token with `POST /auth/revoke`.
+Each staff member sees and revokes their own extension tokens at `{web_prefix}/agent/browser-extensions`, which shows each token's name, extension ID and creation time. Extension tokens also appear on the admin API tokens page, with their kind shown, so an admin can revoke them. A client can also revoke its own token with `POST /auth/revoke`.
+
+#### Connect page requirements
+
+Checking `redirect_uri`:
+
+- The page MUST check `redirect_uri` before anything else. When it is missing or invalid, the page MUST show an error page and MUST NOT redirect anywhere, not even with an error.
+- A valid Chrome `redirect_uri` matches `^https://[a-p]{32}\.chromiumapp\.org/$` as a whole string. The check MUST be a full-string match. Common anchoring mistakes let `https://<32 letters>.chromiumapp.org/\n` or a longer string through:
+  - In Ruby, `^` and `$` are line anchors. Use `\A` and `\z`.
+  - In PHP (PCRE without the `D` modifier), Python `re.match`, and Elixir, `$` also matches before a trailing newline. Use `\z` (or the `D` modifier in PHP), Python `re.fullmatch`, or `\z` in Elixir.
+  - In Java, use `Pattern.matcher(...).matches()`, not `find()`.
+- A parse-based check is an accepted equivalent. It MUST require all of: scheme `https`; a host that matches the pattern exactly (32 letters `a` to `p`, then `.chromiumapp.org`); no port; no userinfo; path exactly `/`; no query; no fragment. The check MUST run on the raw string as well as the parsed parts, so a value that parsers normalise (trailing whitespace, a newline, upper-case letters) is refused.
+- An install MAY add its own patterns, for example for another browser. Every added pattern MUST be held to the same full-string rule.
+
+Checking the other parameters, once `redirect_uri` is valid:
+
+- When `state` is missing, `code_challenge` is missing or is not exactly 43 characters from `[A-Za-z0-9_-]`, or `code_challenge_method` is missing or anything other than `S256`, the page MUST redirect to `redirect_uri?error=invalid_request&state=<state>`. It leaves out `state` when none was sent. It MUST NOT issue a code.
+- `client_name` is optional display text. The page MUST truncate it to 64 characters and MUST HTML-escape it on output. The token name uses the truncated value.
+
+Who can approve:
+
+- Only a signed-in staff member with agent access can approve. A signed-in user without agent access MUST get a 403 page, with no redirect.
+- A signed-out user MUST be sent to sign in and then returned to the connect page with every query parameter intact.
+
+How the page behaves:
+
+- `GET` MUST NOT have side effects. It only shows the page.
+- Approve and Deny MUST be `POST` requests that carry the session's CSRF token. A `POST` without a valid CSRF token MUST be refused without a redirect.
+- The page MUST NOT auto-approve, even for an extension the staff member approved before. Every code needs a fresh click on Approve, so a non-interactive `chrome.identity.launchWebAuthFlow` call never gets a code.
+- Every response from the page, including the error page, MUST carry `Content-Security-Policy: frame-ancestors 'none'` and `X-Frame-Options: DENY`.
+- The page MUST show the extension ID, taken from the `redirect_uri` host (the 32 letters before `.chromiumapp.org`), and not only `client_name`. The caller chooses `client_name`, so it proves nothing. The ID is stored with the code and then with the token, so the browser extensions page can show it.
+
+#### PKCE encoding
+
+- `code_verifier` is 43 to 128 characters from `[A-Za-z0-9-._~]`.
+- `code_challenge = BASE64URL(SHA-256(ASCII(code_verifier)))` with the `=` padding removed. It is always 43 characters.
+- The default URL-safe Base64 encoders in Ruby (`Base64.urlsafe_encode64`), Python (`base64.urlsafe_b64encode`) and Java (`Base64.getUrlEncoder()`) add `=` padding. Strip it, or use `padding: false` in Ruby and `.withoutPadding()` in Java. A padded challenge never matches.
+- Test vector from RFC 7636 Appendix B: the verifier `dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk` gives the challenge `E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM`. Each backend SHOULD have a unit test with it.
+
+#### Exchange rules
+
+- The server MUST compare the `redirect_uri` sent to `POST /auth/exchange` with the one stored for the code by exact string equality, with no normalisation.
+- The server MUST compute the challenge from `code_verifier` as in [PKCE encoding](#pkce-encoding) and compare it with the stored challenge. It SHOULD use a constant-time comparison.
+- Consuming a code MUST be atomic: two concurrent exchanges of one code MUST NOT both succeed. A conditional update that marks the code used only when it is still unused, followed by a check of the affected row count, is enough. A read followed by a separate write is not.
+- Any presentation of a known code MUST consume it, even when the exchange then fails because the verifier or the `redirect_uri` is wrong. A wrong guess burns the code.
+- Codes MUST carry at least 128 bits of entropy, for example 32 random bytes encoded as base64url, and MUST be stored hashed.
+- A code expires 60 seconds after it is issued.
+- The 200 response MUST carry `Cache-Control: no-store`.
+- When an already used code is presented again, the server SHOULD revoke the token that code issued, since a replay means the code leaked. The server keeps the used code's record, with the id of the token it issued, at least until the code would have expired.
+- Every failure answers 400 with the same message, as described in [POST /auth/exchange](#post-authexchange).
 
 ## Conventions
 
@@ -93,6 +145,8 @@ Each staff member sees and revokes their own extension tokens at `{web_prefix}/a
 | `status` | `open`, `in_progress`, `waiting_on_customer`, `waiting_on_agent`, `escalated`, `resolved`, `closed`, `reopened`, `live` |
 | `priority` | `low`, `medium`, `high`, `urgent`, `critical` |
 | `ticket_type` | `question`, `problem`, `incident`, `task` |
+
+A backend emits `ticket_type` as `question` when the stored value is null.
 
 ### Empty objects
 
@@ -130,7 +184,7 @@ Every error body has a `message`. A validation error also has `errors`, a map fr
 
 ### Rate limits
 
-The default is 60 requests per minute per token. Install config may change it. Unauthenticated routes are limited per IP.
+The default is 60 requests per minute per token. Install config may change it. Unauthenticated routes are limited per IP. Requests that fail authentication (401) SHOULD also be limited per IP, so that guessing tokens is no faster than the per-IP limit allows.
 
 Every response from a limited route carries:
 
@@ -240,6 +294,8 @@ Ability `none` means no token. The last column says whether the browser extensio
 
 No token needed. Rate limited per IP. This is how a client finds the API before sign-in.
 
+An unknown or expired token is ignored: the answer is the public 200 response, never 401. Every response MUST carry `Vary: Authorization` and `Cache-Control: no-store`, because the body depends on the token.
+
 ```json
 {
   "api_version": "1.0",
@@ -255,15 +311,16 @@ The `connect_url` and `web_url_template` values are illustrative examples. Real 
 - `backend` is one of `laravel`, `rails`, `django`, `adonis`, `symfony`, `wordpress`, `phoenix`, `go`, `dotnet`, `spring`, `nestjs`.
 - `connect_url` is the absolute URL of the connect page. It is `null` when `auth.exchange` is off.
 - `web_url_template` is the absolute agent ticket URL with `{reference}` where the reference goes.
+- `connect_url` and `web_url_template` MUST be on the same origin (scheme, host and port) as the API base. A client SHOULD refuse a `/meta` response that points elsewhere, since following it would send the staff member to another site.
 - With a valid token the response also has `backend_version`, for example `"1.9.21"`. It is left out of the public response so installs do not advertise their version.
 
 ### POST /auth/exchange
 
-No token. Rate limited to 10 per minute per IP.
+No token. Rate limited to 10 per minute per IP. The server follows the [Exchange rules](#exchange-rules).
 
 Request: `{code, code_verifier, redirect_uri}`, all strings.
 
-Success, 200:
+Success, 200, with `Cache-Control: no-store`:
 
 ```json
 {
@@ -338,6 +395,8 @@ Query parameters. All are optional.
 | `sort_dir` | `asc` or `desc` (default) |
 | `page`, `per_page` | See [Pagination](#pagination) |
 
+Ties in the sort column are broken by `id`, in the same direction as `sort_dir`, so pages do not overlap or skip tickets.
+
 ### POST /tickets
 
 | Field | Type | Rules |
@@ -372,9 +431,29 @@ The message is `Note added.` for a note.
 
 ### Status, priority, assign
 
-- `PATCH /tickets/{reference}/status` takes `{status}` and answers `{message: "Status updated.", status}`.
+- `PATCH /tickets/{reference}/status` takes `{status}` and answers `{message: "Status updated.", status}`. See [Status transitions](#status-transitions).
 - `PATCH /tickets/{reference}/priority` takes `{priority}` and answers `{message: "Priority updated.", priority}`.
 - `POST /tickets/{reference}/assign` takes `{agent_id}` and answers `{message: "Ticket assigned."}`. An unknown agent is a 422.
+
+### Status transitions
+
+A status change MUST follow the install's transition table. A change the table does not allow is a 422 with `errors.status`, for example `{"message": "Cannot change status from closed to waiting_on_customer.", "errors": {"status": ["Cannot change status from closed to waiting_on_customer."]}}`. Setting the status a ticket already has is a 200 and a no-op.
+
+The default table, which an install may change in config:
+
+| From | Allowed to |
+|---|---|
+| `open` | `in_progress`, `waiting_on_customer`, `waiting_on_agent`, `escalated`, `resolved`, `closed` |
+| `in_progress` | `waiting_on_customer`, `waiting_on_agent`, `escalated`, `resolved`, `closed` |
+| `waiting_on_customer` | `open`, `in_progress`, `resolved`, `closed` |
+| `waiting_on_agent` | `open`, `in_progress`, `escalated`, `resolved`, `closed` |
+| `escalated` | `in_progress`, `resolved`, `closed` |
+| `resolved` | `reopened`, `closed` |
+| `closed` | `reopened` |
+| `reopened` | `in_progress`, `waiting_on_customer`, `waiting_on_agent`, `escalated`, `resolved`, `closed` |
+| `live` | `open`, `resolved`, `closed` |
+
+The conformance suite assumes the default table.
 
 ### POST /tickets/{reference}/follow
 
@@ -416,7 +495,7 @@ Otherwise the body is `null`.
 
 ### Reports
 
-- `GET /reports/summary` takes `period` in days (default 30) and answers `{period_days, avg_first_response_hours, avg_resolution_hours, sla_compliance_rate, csat_average, volume, by_status, by_priority, comparison}`. `by_status` and `by_priority` are lists of `{label, value}` rows, for example `[{"label": "open", "value": 12}]`, not maps.
+- `GET /reports/summary` takes `period` in days (default 30) and answers `{period_days, avg_first_response_hours, avg_resolution_hours, sla_compliance_rate, csat_average, volume, by_status, by_priority, comparison}`. `by_status` and `by_priority` are lists of `{label, value}` rows, for example `[{"label": "open", "value": 12}]`, not maps. A backend casts each `value` to an integer, since some database drivers return counts as strings.
 - `GET /reports/export/{type}` takes `format` (`json` default, or `csv`) and `period`. `type` is one of `tickets`, `agent_performance`, `sla_compliance`, `csat`, `resolution_times`, `first_response_times`. Any other type is 404. JSON answers `{report_type, generated_at, filters, record_count, data}`. An empty `filters` may arrive as `[]`.
 
 ## Features
@@ -450,3 +529,6 @@ First version. Taken from `escalated-laravel` 1.9.20 with these changes to Larav
 - `GET /reports/export/{type}` answers 404 for an unknown type. Laravel answered 500.
 - `following` returns the tickets the caller follows. Laravel returned the tickets the caller requested.
 - `GET /tickets/{reference}` always returns `is_following` and `followers_count`. Laravel left them out.
+- `GET /tickets/{reference}` returns `sla_breached`, like the list item. Laravel's `TicketResource` leaves it out.
+- A status change the transition table does not allow is a 422 with `errors.status`, and setting the current status is a 200 no-op. Laravel throws `InvalidArgumentException` from `Ticket::transitionTo` (`src/Models/Ticket.php`, line 932), which answers 500. Setting the current status hits the same exception, except for `resolved`, `closed`, `reopened` and `escalated`, which Laravel routes to their own methods without checking the table.
+- `GET /tickets` breaks ties in the sort column by `id`. Laravel orders by the sort column alone (`src/Drivers/LocalDriver.php`, line 139), so tickets created in the same second can repeat or go missing across pages.

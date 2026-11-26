@@ -31,11 +31,17 @@ paths:
       tags: [Discovery]
       operationId: getMeta
       summary: Discover the API
-      description: No token needed. Rate limited per IP. `backend_version` is present only with a valid token.
+      description: |
+        No token needed. Rate limited per IP. `backend_version` is present only with a valid token.
+        An unknown or expired token is ignored and the answer is the public 200 response, never 401.
+        `connect_url` and `web_url_template` MUST be on the same origin as the API base.
       security: []
       responses:
         '200':
           description: API metadata
+          headers:
+            Vary: { $ref: '#/components/headers/VaryAuthorization' }
+            Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Meta' }
@@ -47,7 +53,11 @@ paths:
       tags: [Auth]
       operationId: exchangeAuthCode
       summary: Exchange a connect code for a token
-      description: No token. Rate limited to 10 per minute per IP.
+      description: |
+        No token. Rate limited to 10 per minute per IP. See *Exchange rules* in `staff-api-v1.md`:
+        `redirect_uri` is compared by exact string equality, consuming a code is atomic, any
+        presentation of a known code consumes it (even a failed one), and a replayed code SHOULD
+        revoke the token it issued.
       security: []
       requestBody:
         required: true
@@ -57,6 +67,8 @@ paths:
       responses:
         '200':
           description: Token minted
+          headers:
+            Cache-Control: { $ref: '#/components/headers/CacheControlNoStore' }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ExchangeResponse' }
@@ -142,7 +154,7 @@ paths:
           schema: { type: string, format: date-time }
         - name: sort_by
           in: query
-          description: Anything else falls back to `created_at`.
+          description: Anything else falls back to `created_at`. Ties are broken by `id` in the same direction as `sort_dir`.
           schema:
             type: string
             default: created_at
@@ -309,6 +321,10 @@ paths:
       tags: [Tickets]
       operationId: updateTicketStatus
       summary: Change a ticket's status
+      description: |
+        The change must follow the install's transition table (the default is in `staff-api-v1.md`).
+        A change the table does not allow is a 422 with `errors.status`. Setting the current status
+        is a 200 and a no-op.
       requestBody:
         required: true
         content:
@@ -710,6 +726,12 @@ components:
     RetryAfter:
       description: Seconds until the limit resets.
       schema: { type: integer }
+    CacheControlNoStore:
+      description: Must include `no-store`.
+      schema: { type: string, examples: [no-store] }
+    VaryAuthorization:
+      description: Must include `Authorization`, because the body depends on the token.
+      schema: { type: string, examples: [Authorization] }
 
   responses:
     Message:
@@ -861,7 +883,9 @@ components:
       properties:
         id: { $ref: '#/components/schemas/Id' }
         reference: { type: string }
-        ticket_type: { type: string }
+        ticket_type:
+          type: string
+          description: '`question` when the stored value is null.'
         account:
           description: Present only when accounts are enabled.
           oneOf:
@@ -898,12 +922,14 @@ components:
 
     Ticket:
       type: object
-      description: Full ticket. `POST /tickets` omits `replies` and `activities`.
-      required: [id, reference, ticket_type, subject, description, status, status_label, priority, priority_label, channel, metadata, external_reference, requester, assignee, department, tags, sla, is_following, followers_count, custom_actions, resolved_at, closed_at, last_reply_at, last_customer_reply_at, created_at, updated_at]
+      description: Full ticket. It has every list item field except the list item's `requester`. `POST /tickets` omits `replies` and `activities`.
+      required: [id, reference, ticket_type, subject, description, status, status_label, priority, priority_label, channel, metadata, external_reference, requester, assignee, department, sla_breached, tags, sla, is_following, followers_count, custom_actions, resolved_at, closed_at, last_reply_at, last_customer_reply_at, created_at, updated_at]
       properties:
         id: { $ref: '#/components/schemas/Id' }
         reference: { type: string }
-        ticket_type: { type: string }
+        ticket_type:
+          type: string
+          description: '`question` when the stored value is null.'
         account:
           oneOf:
             - $ref: '#/components/schemas/AccountRef'
@@ -946,6 +972,7 @@ components:
           oneOf:
             - $ref: '#/components/schemas/NamedRef'
             - type: 'null'
+        sla_breached: { type: boolean }
         tags:
           type: array
           items: { $ref: '#/components/schemas/Tag' }
@@ -1205,8 +1232,12 @@ components:
       required: [code, code_verifier, redirect_uri]
       properties:
         code: { type: string }
-        code_verifier: { type: string }
-        redirect_uri: { type: string }
+        code_verifier:
+          type: string
+          description: 43 to 128 characters from `[A-Za-z0-9-._~]`. A well-formed but wrong verifier is a 400 and consumes the code.
+        redirect_uri:
+          type: string
+          description: Compared with the value stored for the code by exact string equality.
 
     ExchangeResponse:
       type: object
@@ -1264,4 +1295,6 @@ components:
         required: [label, value]
         properties:
           label: { type: string }
-          value: { type: integer }
+          value:
+            type: integer
+            description: A backend casts counts to integers; some database drivers return them as strings.
