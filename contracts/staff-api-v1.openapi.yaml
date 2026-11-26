@@ -677,7 +677,11 @@ paths:
                 properties:
                   report_type: { type: string }
                   generated_at: { $ref: '#/components/schemas/Timestamp' }
-                  filters: { type: object, additionalProperties: true }
+                  filters:
+                    description: Applied filters. An empty set may serialize as `[]`.
+                    oneOf:
+                      - { type: object, additionalProperties: true }
+                      - { type: array, maxItems: 0 }
                   record_count: { type: integer }
                   data: { type: array, items: { type: object, additionalProperties: true } }
             text/csv:
@@ -911,7 +915,12 @@ components:
         priority: { $ref: '#/components/schemas/TicketPriority' }
         priority_label: { type: string }
         channel: { type: string }
-        metadata: { type: [object, 'null'], additionalProperties: true }
+        metadata:
+          description: Free-form JSON. An empty value may serialize as `[]`, so accept an empty array as empty.
+          oneOf:
+            - { type: object, additionalProperties: true }
+            - { type: array, maxItems: 0 }
+            - { type: 'null' }
         external_reference: { type: [string, 'null'] }
         requester:
           type: object
@@ -1243,6 +1252,16 @@ components:
         sla_compliance_rate: { type: [number, 'null'] }
         csat_average: { type: [number, 'null'] }
         volume: {}
-        by_status: { type: object, additionalProperties: true }
-        by_priority: { type: object, additionalProperties: true }
+        by_status: { $ref: '#/components/schemas/LabelValueRows' }
+        by_priority: { $ref: '#/components/schemas/LabelValueRows' }
         comparison: {}
+
+    LabelValueRows:
+      description: 'Counts as a list of rows, for example [{"label": "open", "value": 12}].'
+      type: array
+      items:
+        type: object
+        required: [label, value]
+        properties:
+          label: { type: string }
+          value: { type: integer }

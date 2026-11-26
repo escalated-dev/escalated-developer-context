@@ -94,6 +94,10 @@ Each staff member sees and revokes their own extension tokens at `{web_prefix}/a
 | `priority` | `low`, `medium`, `high`, `urgent`, `critical` |
 | `ticket_type` | `question`, `problem`, `incident`, `task` |
 
+### Empty objects
+
+Some backends serialize an empty JSON object as `[]`. Clients must accept `[]` as empty for free-form object fields such as ticket `metadata` and report `filters`.
+
 ### Pagination
 
 `GET /tickets` takes `page` (default 1) and `per_page` (default 15, maximum 100). A `per_page` above 100 is a 422. It answers:
@@ -412,8 +416,8 @@ Otherwise the body is `null`.
 
 ### Reports
 
-- `GET /reports/summary` takes `period` in days (default 30) and answers `{period_days, avg_first_response_hours, avg_resolution_hours, sla_compliance_rate, csat_average, volume, by_status, by_priority, comparison}`.
-- `GET /reports/export/{type}` takes `format` (`json` default, or `csv`) and `period`. `type` is one of `tickets`, `agent_performance`, `sla_compliance`, `csat`, `resolution_times`, `first_response_times`. Any other type is 404. JSON answers `{report_type, generated_at, filters, record_count, data}`.
+- `GET /reports/summary` takes `period` in days (default 30) and answers `{period_days, avg_first_response_hours, avg_resolution_hours, sla_compliance_rate, csat_average, volume, by_status, by_priority, comparison}`. `by_status` and `by_priority` are lists of `{label, value}` rows, for example `[{"label": "open", "value": 12}]`, not maps.
+- `GET /reports/export/{type}` takes `format` (`json` default, or `csv`) and `period`. `type` is one of `tickets`, `agent_performance`, `sla_compliance`, `csat`, `resolution_times`, `first_response_times`. Any other type is 404. JSON answers `{report_type, generated_at, filters, record_count, data}`. An empty `filters` may arrive as `[]`.
 
 ## Features
 
