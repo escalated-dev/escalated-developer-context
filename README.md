@@ -22,6 +22,7 @@ This repo holds the glossary, domain model, architecture decisions, conventions 
 - **"How do I do X?"** → [`guides/`](guides/)
 - **"What's in a specific repo?"** → [`repos/`](repos/)
 - **"How should I style / structure / test this?"** → [`CONVENTIONS.md`](CONVENTIONS.md), [`TESTING.md`](TESTING.md)
+- **"What does the staff REST API look like?"** → [`contracts/`](contracts/)
 
 ## Learn more
 
