@@ -12,6 +12,9 @@ on:
       - 'conformance/**'
       - '.github/workflows/contracts.yml'
 
+permissions:
+  contents: read
+
 jobs:
   openapi-lint:
     runs-on: ubuntu-latest
