@@ -1,0 +1,39 @@
+name: contracts
+
+on:
+  push:
+    paths:
+      - 'contracts/**'
+      - 'conformance/**'
+      - '.github/workflows/contracts.yml'
+  pull_request:
+    paths:
+      - 'contracts/**'
+      - 'conformance/**'
+      - '.github/workflows/contracts.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  openapi-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Lint OpenAPI description
+        working-directory: contracts
+        run: npx --yes @redocly/cli@1 lint staff-api-v1.openapi.yaml
+
+  conformance-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Typecheck conformance suite
+        working-directory: conformance
+        run: npm ci && npm run typecheck

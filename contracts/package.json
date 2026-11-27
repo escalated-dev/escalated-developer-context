@@ -1,0 +1,8 @@
+{
+  "name": "escalated-staff-api-contract",
+  "private": true,
+  "description": "Tooling for the staff API contract v1 OpenAPI description",
+  "scripts": {
+    "lint": "npx --yes @redocly/cli@1 lint staff-api-v1.openapi.yaml"
+  }
+}

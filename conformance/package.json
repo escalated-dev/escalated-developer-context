@@ -1,0 +1,21 @@
+{
+  "name": "escalated-staff-api-conformance",
+  "private": true,
+  "description": "Black-box conformance suite for the Escalated staff API contract v1",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.7",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.2",
+    "yaml": "^2.9.1"
+  }
+}
