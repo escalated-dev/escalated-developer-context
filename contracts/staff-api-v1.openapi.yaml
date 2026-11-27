@@ -138,6 +138,7 @@ paths:
         - { name: ticket_type, in: query, schema: { $ref: '#/components/schemas/TicketType' } }
         - { name: assigned_to, in: query, description: Assignee id., schema: { $ref: '#/components/schemas/Id' } }
         - { name: unassigned, in: query, description: '`1` for tickets with no assignee.', schema: { type: string, enum: ['1'] } }
+        - { name: open, in: query, description: '`1` for tickets in any open-family status, which is every status except `resolved` and `closed`. `0` is the same as omitting it. Combines with the other filters. Listed as `tickets.open_filter` in `/meta` features.', schema: { type: string, enum: ['0', '1'] } }
         - { name: department_id, in: query, schema: { $ref: '#/components/schemas/Id' } }
         - { name: account_type, in: query, description: Send together with `account_id`., schema: { type: string } }
         - { name: account_id, in: query, description: Send together with `account_type`., schema: { type: string } }
@@ -831,7 +832,7 @@ components:
           type: array
           items:
             type: string
-            description: 'Known values: tickets.create, tickets.macro, tickets.updated_since, tickets.last_customer_reply_at, canned_responses, macros, auth.exchange, auth.revoke, realtime.'
+            description: 'Known values: tickets.create, tickets.macro, tickets.updated_since, tickets.last_customer_reply_at, tickets.open_filter, canned_responses, macros, auth.exchange, auth.revoke, realtime.'
         connect_url:
           type: [string, 'null']
           description: Absolute URL of the connect page. Null when `auth.exchange` is off. The example value is illustrative.

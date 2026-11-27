@@ -50,6 +50,13 @@ describeContract('GET /tickets', () => {
     for (const t of res.json.data) expect(t.assignee).toBeNull();
   });
 
+  it.skipIf(!hasFeature('tickets.open_filter'))('open=1 returns only tickets that are neither resolved nor closed', async () => {
+    const res = await api('GET', '/tickets', { query: { open: 1 } });
+    expect(res.status).toBe(200);
+    expect(res.json.data.length).toBeGreaterThan(0);
+    for (const t of res.json.data) expect(['resolved', 'closed']).not.toContain(t.status);
+  });
+
   describe.skipIf(!hasFeature('tickets.updated_since'))('updated_since', () => {
     it('a far-future value returns no tickets', async () => {
       const res = await api('GET', '/tickets', { query: { updated_since: '2999-01-01T00:00:00Z' } });

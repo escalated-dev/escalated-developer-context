@@ -301,7 +301,7 @@ An unknown or expired token is ignored: the answer is the public 200 response, n
 {
   "api_version": "1.0",
   "backend": "laravel",
-  "features": ["tickets.create", "tickets.macro", "tickets.updated_since", "tickets.last_customer_reply_at", "canned_responses", "macros", "auth.exchange", "auth.revoke", "realtime"],
+  "features": ["tickets.create", "tickets.macro", "tickets.updated_since", "tickets.last_customer_reply_at", "tickets.open_filter", "canned_responses", "macros", "auth.exchange", "auth.revoke", "realtime"],
   "connect_url": "https://help.example.com/support/agent/connect-extension",
   "web_url_template": "https://help.example.com/support/agent/tickets/{reference}"
 }
@@ -385,6 +385,7 @@ Query parameters. All are optional.
 | `ticket_type` | One ticket type |
 | `assigned_to` | Assignee id |
 | `unassigned` | `1` for tickets with no assignee |
+| `open` | `1` for tickets in any open-family status: every status except `resolved` and `closed`. `0` is the same as leaving it out. Combines with the other filters, so `open=1&status=resolved` returns nothing. Listed as `tickets.open_filter` in `/meta` features |
 | `department_id` | Department id |
 | `account_type`, `account_id` | Account filter. Must be sent together |
 | `search` | Matches subject, reference, description, and the requester's name and email |
@@ -512,6 +513,7 @@ Otherwise the body is `null`.
 | `tickets.macro` | `POST /tickets/{reference}/macro` works |
 | `tickets.updated_since` | `GET /tickets` honours `updated_since` |
 | `tickets.last_customer_reply_at` | List and show items carry `last_customer_reply_at` |
+| `tickets.open_filter` | `GET /tickets` honours `open` |
 | `canned_responses` | `GET /canned-responses` works |
 | `macros` | `GET /macros` works |
 | `auth.exchange` | The connect page and `POST /auth/exchange` work |
@@ -529,6 +531,7 @@ First version. Taken from `escalated-laravel` 1.9.20 with these changes to Larav
 - Added `GET /meta`, `POST /auth/exchange`, `POST /auth/revoke` and the connect flow.
 - Added `updated_since` on `GET /tickets`.
 - Added `last_customer_reply_at` on ticket list and show items.
+- Added the optional `open` filter on `GET /tickets` (`open=1` returns every status except `resolved` and `closed`), listed as the `tickets.open_filter` feature.
 - `GET /macros` returns `actions`. Laravel returned `steps`, which was always null.
 - `GET /reports/export/{type}` answers 404 for an unknown type. Laravel answered 500.
 - `following` returns the tickets the caller follows. Laravel returned the tickets the caller requested.

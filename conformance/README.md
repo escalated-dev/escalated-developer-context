@@ -42,7 +42,7 @@ Request counts per run, measured against a mock that serves every feature:
 
 | Bucket | Requests | Limit |
 |---|---|---|
-| Agent token | 43 to 45 (44 with every fixture set; more only when a restore step has to retry) | 60 per minute per token |
+| Agent token | 44 to 46 (45 with every fixture set; more only when a restore step has to retry) | 60 per minute per token |
 | Revocable token | 2 | 60 per minute per token |
 | Token minted by the connect test | 2 | 60 per minute per token |
 | `POST /auth/exchange`, per IP | 11 (1 + 4 + 6 until the 429), at most 16 | 10 per minute per IP |
